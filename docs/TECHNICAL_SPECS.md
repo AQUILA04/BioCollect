@@ -39,14 +39,16 @@ Le modèle de données sépare la définition des formulaires (schéma) des donn
 
 La complexité technique principale réside dans l'application mobile, qui doit dialoguer avec des périphériques USB.
 
-*   **Native Modules (React Native)** : Un pont (Bridge) Java/Kotlin doit être écrit pour encapsuler les SDK C/Java fournis par les fabricants de scanners d'empreintes (ex: SecuGen FDx SDK).
-*   **Processus de Capture** :
+*   **Architecture du Bridge Multi-Vendor (React Native)** : Un pont (Bridge) Java/Kotlin est conçu autour d'une interface `BiometricScannerProvider`. Cela permet d'encapsuler dynamiquement les SDK C/Java fournis par les différents fabricants sans modifier le code React Native.
+*   **Intégration Miaxis (Premier Provider)** : L'implémentation initiale utilise le SDK Android Miaxis Justouch (pour les scanners optiques SM-91M/SM-92M via USB OTG).
+*   **Processus de Capture Abstrait** :
     1.  L'application React Native demande l'accès à l'USB (Android `UsbManager`).
-    2.  Appel de la fonction de capture via le Bridge.
-    3.  Le SDK natif capture l'image brute (RAW ou WSQ).
-    4.  Le SDK natif calcule le score NFIQ (1 à 5).
-    5.  Le Bridge renvoie l'image encodée en Base64 et le score NFIQ au thread JavaScript (React Native).
-    6.  Si le score NFIQ est supérieur au seuil configuré dans la table `BiometricConfig`, la capture est validée et stockée dans WatermelonDB. Sinon, le processus reprend.
+    2.  Le Bridge détecte le modèle branché (ex: VID/PID de Miaxis) et instancie le provider correspondant (`MiaxisScannerProvider`).
+    3.  Appel de la fonction de capture via l'interface unifiée.
+    4.  Le SDK natif Miaxis capture l'image brute (RAW/WSQ).
+    5.  Le SDK calcule le score NFIQ (1 à 5).
+    6.  Le Bridge renvoie l'image encodée en Base64 et le score NFIQ au thread JavaScript (React Native).
+    7.  Si le score NFIQ est supérieur au seuil configuré dans la table `BiometricConfig`, la capture est validée et stockée dans WatermelonDB. Sinon, le processus reprend.
 
 ## 4. Protocole de Synchronisation (Offline-First)
 

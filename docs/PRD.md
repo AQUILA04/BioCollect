@@ -15,7 +15,7 @@
 ### 3.1. Formulaires et Collecte
 *   **Form Builder Visuel** : Création de formulaires dynamiques (texte, dates, choix multiples, photos, logique conditionnelle).
 *   **Application Mobile (Android)** : Fonctionnement 100% offline-first. Les données et les empreintes sont stockées localement et chiffrées jusqu'à la synchronisation.
-*   **Composant Biométrique Natif** : Intégration dans le formulaire d'un champ "Capture d'empreintes" communiquant avec des scanners USB/Bluetooth externes (ex: SecuGen, Suprema) via l'application Android.
+*   **Composant Biométrique Natif Multi-Vendor** : Intégration dans le formulaire d'un champ "Capture d'empreintes" communiquant avec des scanners USB/Bluetooth externes via l'application Android. Le système est conçu pour supporter plusieurs fabricants. Le MVP inclut l'intégration native des scanners **Miaxis** (série SM-91M/SM-92M).
 
 ### 3.2. Gestion des Identités et Biométrie
 *   **Configuration par Projet** : Choix du nombre d'empreintes à capturer (ex: 2 pouces, ou 10 doigts) et définition du seuil de qualité minimum (NFIQ) requis pour valider la capture.

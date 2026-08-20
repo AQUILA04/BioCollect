@@ -10,7 +10,7 @@ BioCollect est conçu selon une architecture distribuée, séparant clairement l
 *   **Technologie** : React Native (ou Flutter) pour le développement multiplateforme, avec des modules natifs (Java/Kotlin) pour l'intégration matérielle des scanners d'empreintes via USB OTG.
 *   **Base de Données Locale** : SQLite (via WatermelonDB ou Realm) pour un accès ultra-rapide et un stockage persistant hors-ligne des formulaires, des données collectées et des images biométriques chiffrées.
 *   **Moteur de Formulaire** : Un moteur de rendu JSON dynamique (similaire à Enketo) capable d'interpréter les règles de logique conditionnelle et de validation localement.
-*   **Module Biométrique Local** : Intégration des SDK des fabricants de scanners (ex: SecuGen, Suprema) pour la capture et le calcul de la qualité NFIQ (NIST Fingerprint Image Quality) en temps réel sur le téléphone, avant même la synchronisation.
+*   **Module Biométrique Local (Multi-Vendor)** : Architecture basée sur des plugins (Factory Pattern) pour supporter plusieurs fabricants de scanners. Le premier fournisseur intégré est **Miaxis** (série SM-91M/SM-92M). Le module abstrait les appels au SDK natif Android de Miaxis pour la capture, l'extraction de templates et le calcul de la qualité NFIQ (NIST Fingerprint Image Quality) en temps réel sur le téléphone, avant même la synchronisation.
 
 ### 2.2. Backend Core (BioCollect SaaS)
 *   **Technologie** : Spring Boot (Java/Kotlin) ou Node.js (NestJS), offrant une API REST/GraphQL robuste.
