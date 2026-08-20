@@ -10,7 +10,7 @@ import {
   uniqueIndex,
   varchar,
 } from "drizzle-orm/mysql-core";
-import { CONFLICT_ACTIONS, SUBMISSION_STATUSES, USER_ROLES } from "../shared/biocollect";
+import { CONFLICT_ACTIONS, SUBMISSION_STATUSES, TENANT_ROLES, USER_ROLES } from "../shared/biocollect";
 
 /** Core user table backing the Manus OAuth flow. */
 export const users = mysqlTable("users", {
@@ -20,20 +20,44 @@ export const users = mysqlTable("users", {
   email: varchar("email", { length: 320 }),
   loginMethod: varchar("loginMethod", { length: 64 }),
   role: mysqlEnum("role", USER_ROLES).default("Enquêteur").notNull(),
+  activeTenantId: varchar("activeTenantId", { length: 36 }),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   lastSignedIn: timestamp("lastSignedIn").defaultNow().notNull(),
 });
 
+/** A tenant represents an entity and is the hard boundary for business data. */
+export const tenants = mysqlTable("tenants", {
+  id: varchar("id", { length: 36 }).primaryKey(),
+  name: varchar("name", { length: 160 }).notNull(),
+  slug: varchar("slug", { length: 96 }).notNull().unique(),
+  isActive: boolean("isActive").default(true).notNull(),
+  createdBy: int("createdBy").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export const tenantMemberships = mysqlTable("tenantMemberships", {
+  id: varchar("id", { length: 36 }).primaryKey(),
+  tenantId: varchar("tenantId", { length: 36 }).notNull(),
+  userId: int("userId").notNull(),
+  role: mysqlEnum("role", TENANT_ROLES).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, table => [
+  uniqueIndex("tenant_member_unique").on(table.tenantId, table.userId),
+  index("tenant_memberships_user_idx").on(table.userId),
+]);
+
 export const projects = mysqlTable("projects", {
   id: varchar("id", { length: 36 }).primaryKey(),
+  tenantId: varchar("tenantId", { length: 36 }).notNull().default("legacy-tenant"),
   name: varchar("name", { length: 160 }).notNull(),
   description: text("description"),
   isActive: boolean("isActive").default(true).notNull(),
   createdBy: int("createdBy").notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
-}, table => [index("projects_created_by_idx").on(table.createdBy)]);
+}, table => [index("projects_created_by_idx").on(table.createdBy), index("projects_tenant_idx").on(table.tenantId)]);
 
 export const formSchemas = mysqlTable("formSchemas", {
   id: varchar("id", { length: 36 }).primaryKey(),
@@ -97,6 +121,8 @@ export const conflictResolutions = mysqlTable("conflictResolutions", {
 
 export type User = typeof users.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;
+export type Tenant = typeof tenants.$inferSelect;
+export type TenantMembership = typeof tenantMemberships.$inferSelect;
 export type Project = typeof projects.$inferSelect;
 export type FormSchema = typeof formSchemas.$inferSelect;
 export type BiometricConfig = typeof biometricConfigs.$inferSelect;

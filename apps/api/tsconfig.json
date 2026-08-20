@@ -13,11 +13,12 @@
     "skipLibCheck": true,
     "allowImportingTsExtensions": true,
     "moduleResolution": "bundler",
-    "baseUrl": ".",
+    "baseUrl": "..",
     "types": ["node", "vite/client"],
     "paths": {
-      "@/*": ["../web/src/*"],
-      "@shared/*": ["./shared/*"]
+      "@/*": ["./web/src/*"],
+      "@shared/*": ["./api/shared/*"],
+      "server/*": ["./api/server/*"]
     }
   }
 }

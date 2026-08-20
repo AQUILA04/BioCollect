@@ -6,6 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { trpc } from "@/lib/trpc";
+import { useTenant } from "@/contexts/TenantContext";
 import type { FormField, FormFieldType } from "../../../api/shared/biocollect";
 import { CalendarDays, CheckSquare2, GripVertical, Image, Loader2, Plus, Type } from "lucide-react";
 import { useMemo, useState } from "react";
@@ -38,7 +39,8 @@ function isVisible(field: FormField, values: Record<string, string>) {
 }
 
 function FormBuilderContent() {
-  const projects = trpc.biocollect.projects.list.useQuery();
+  const { tenantId } = useTenant();
+  const projects = trpc.biocollect.projects.list.useQuery({ tenantId: tenantId ?? "" }, { enabled: Boolean(tenantId) });
   const utils = trpc.useUtils();
   const [projectId, setProjectId] = useState("");
   const [name, setName] = useState("Formulaire d’enrôlement");
@@ -92,7 +94,8 @@ function FormBuilderContent() {
   function publish() {
     if (!projectId) return toast.error("Sélectionnez un projet avant de publier.");
     if (!fields.length) return toast.error("Ajoutez au moins un champ au formulaire.");
-    save.mutate({ projectId, name, fields, isPublished: true });
+    if (!tenantId) return toast.error("Sélectionnez un espace d’entité avant de publier.");
+    save.mutate({ tenantId, projectId, name, fields, isPublished: true });
   }
 
   return <>

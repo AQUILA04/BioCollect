@@ -64,7 +64,12 @@ export async function getUserByOpenId(openId: string) {
   const db = await getDb();
   if (!db) return undefined;
   const result = await db.select().from(users).where(eq(users.openId, openId)).limit(1);
-  return result[0];
+  const user = result[0];
+  if (user && user.openId === ENV.ownerOpenId && user.role !== "Superadmin") {
+    await db.update(users).set({ role: "Superadmin" }).where(eq(users.id, user.id));
+    return { ...user, role: "Superadmin" as const };
+  }
+  return user;
 }
 
 export async function listProjects() {

@@ -4,7 +4,7 @@
 
 ## État du MVP
 
-Le MVP met en œuvre la gestion des projets biométriques, la conception de formulaires, la synchronisation protégée, le workflow de dossier, un mock autonome de déduplication, le tableau de supervision et la résolution de conflits. Les interfaces de supervision sont accessibles aux rôles **Administrateur** et **Superviseur**, tandis que les procédures de synchronisation sont réservées au rôle **Enquêteur**.
+Le MVP met en œuvre la gestion des projets biométriques, la conception de formulaires, la synchronisation protégée, le workflow de dossier, un mock autonome de déduplication, le tableau de supervision et la résolution de conflits. Il inclut également une landing page publique et une isolation multi-tenant : chaque entité possède son propre espace de données. Le rôle global **Superadmin** peut créer et administrer les tenants.
 
 | Zone | Responsabilité | Éléments implémentés |
 |---|---|---|
@@ -14,6 +14,7 @@ Le MVP met en œuvre la gestion des projets biométriques, la conception de form
 | `packages/form-engine` | Logique de formulaires | Évaluation des règles de visibilité conditionnelle |
 | `packages/biometric-sdk-bridge` | Abstraction matérielle | Contrat de provider biométrique pour Miaxis et fournisseurs futurs |
 | `contracts` | Contrats inter-applications | Contrat de synchronisation versionné |
+| `docs/MULTI_TENANCY.md` | Sécurité d’accès | Modèle de tenants, appartenances et règles d’isolation |
 
 ## Pré-requis et commandes
 

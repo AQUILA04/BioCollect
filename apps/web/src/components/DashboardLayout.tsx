@@ -21,17 +21,19 @@ import {
 } from "@/components/ui/sidebar";
 import { startLogin } from "@/const";
 import { useIsMobile } from "@/hooks/useMobile";
-import { FilePenLine, FolderKanban, GitCompareArrows, LayoutDashboard, LogOut, PanelLeft } from "lucide-react";
+import { Building2, Crown, FilePenLine, FolderKanban, GitCompareArrows, LayoutDashboard, LogOut, PanelLeft } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { DashboardLayoutSkeleton } from './DashboardLayoutSkeleton';
 import { Button } from "./ui/button";
 
 const menuItems = [
-  { icon: LayoutDashboard, label: "Vue d’ensemble", path: "/", roles: ["Administrateur", "Superviseur", "Enquêteur"] },
-  { icon: FolderKanban, label: "Projets", path: "/projects", roles: ["Administrateur", "Superviseur"] },
-  { icon: FilePenLine, label: "Form Builder", path: "/forms", roles: ["Administrateur"] },
-  { icon: GitCompareArrows, label: "Conflits", path: "/conflicts", roles: ["Administrateur", "Superviseur"] },
+  { icon: LayoutDashboard, label: "Vue d’ensemble", path: "/app", roles: ["Superadmin", "Administrateur", "Superviseur", "Enquêteur"] },
+  { icon: FolderKanban, label: "Projets", path: "/projects", roles: ["Superadmin", "Administrateur", "Superviseur", "Enquêteur"] },
+  { icon: FilePenLine, label: "Form Builder", path: "/forms", roles: ["Superadmin", "Administrateur", "Superviseur", "Enquêteur"] },
+  { icon: GitCompareArrows, label: "Conflits", path: "/conflicts", roles: ["Superadmin", "Administrateur", "Superviseur", "Enquêteur"] },
+  { icon: Building2, label: "Mes espaces", path: "/spaces", roles: ["Superadmin", "Administrateur", "Superviseur", "Enquêteur"] },
+  { icon: Crown, label: "Superadmin", path: "/superadmin", roles: ["Superadmin"] },
 ];
 
 const SIDEBAR_WIDTH_KEY = "sidebar-width";

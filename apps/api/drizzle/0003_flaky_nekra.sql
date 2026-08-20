@@ -1,0 +1,1 @@
+ALTER TABLE `users` ADD `activeTenantId` varchar(36);

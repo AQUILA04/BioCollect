@@ -3,6 +3,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { useAuth } from "@/_core/hooks/useAuth";
+import { useTenant } from "@/contexts/TenantContext";
 import { trpc } from "@/lib/trpc";
 import { Activity, AlertTriangle, ArrowRight, CloudCog, FolderKanban, Loader2, ShieldCheck, UsersRound } from "lucide-react";
 import { Link } from "wouter";
@@ -23,8 +24,10 @@ function FieldAgentPanel() {
 
 function DashboardContent() {
   const { user } = useAuth();
-  const dashboard = trpc.biocollect.dashboard.useQuery(undefined, { enabled: user?.role !== "Enquêteur" });
+  const { tenantId } = useTenant();
+  const dashboard = trpc.biocollect.dashboard.useQuery({ tenantId: tenantId ?? "" }, { enabled: Boolean(tenantId) && user?.role !== "Enquêteur" });
   if (user?.role === "Enquêteur") return <FieldAgentPanel />;
+  if (!tenantId) return <FieldAgentPanel />;
   return <>
     <PageHeader eyebrow="Centre de supervision" title="Vue d’ensemble" description="Suivez la collecte, les synchronisations et les dossiers nécessitant une décision biométrique." action={<Link href="/projects"><Button><FolderKanban className="mr-2 h-4 w-4" />Gérer les projets</Button></Link>} />
     {dashboard.isLoading ? <div className="flex h-72 items-center justify-center text-slate-500"><Loader2 className="mr-2 h-5 w-5 animate-spin" />Chargement des indicateurs…</div> : null}

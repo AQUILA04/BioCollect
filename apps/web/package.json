@@ -5,8 +5,8 @@
   "license": "MIT",
   "scripts": {
     "dev": "pnpm --dir ../api dev",
-    "check": "pnpm --dir ../api check",
     "build": "pnpm --dir ../api build",
+    "check": "pnpm --dir ../api check",
     "format": "prettier --write src"
   },
   "dependencies": {

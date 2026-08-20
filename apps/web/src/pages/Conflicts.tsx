@@ -5,6 +5,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { trpc } from "@/lib/trpc";
+import { useTenant } from "@/contexts/TenantContext";
 import type { ConflictAction } from "../../../api/shared/biocollect";
 import { AlertTriangle, CheckCircle2, GitMerge, Loader2, ShieldAlert, XCircle } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
@@ -15,14 +16,15 @@ import { asRecord, formatDate, STATUS_CLASS } from "../lib/biocollect-ui";
 function DetailList({ value }: { value: unknown }) { const entries = Object.entries(asRecord(value)); return <dl className="grid gap-3">{entries.length ? entries.map(([key, item]) => <div key={key} className="border-b border-slate-100 pb-3"><dt className="text-xs font-medium uppercase tracking-wide text-slate-400">{key}</dt><dd className="mt-1 break-words text-sm text-slate-800">{String(item)}</dd></div>) : <p className="text-sm text-slate-500">Aucune donnée démographique.</p>}</dl>; }
 
 function ConflictsContent() {
+  const { tenantId } = useTenant();
   const utils = trpc.useUtils();
-  const conflicts = trpc.biocollect.conflicts.list.useQuery();
+  const conflicts = trpc.biocollect.conflicts.list.useQuery({ tenantId: tenantId ?? "" }, { enabled: Boolean(tenantId) });
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [reason, setReason] = useState("");
   const resolve = trpc.biocollect.conflicts.resolve.useMutation({ onSuccess: () => { void utils.biocollect.conflicts.list.invalidate(); void utils.biocollect.dashboard.invalidate(); setReason(""); toast.success("Décision de conflit enregistrée dans la piste d’audit."); }, onError: error => toast.error(error.message) });
   useEffect(() => { if (!selectedId && conflicts.data?.[0]?.source?.id) setSelectedId(conflicts.data[0].source.id); }, [conflicts.data, selectedId]);
   const selected = useMemo(() => conflicts.data?.find(item => item.source?.id === selectedId) ?? null, [conflicts.data, selectedId]);
-  const takeAction = (action: ConflictAction) => { if (!selected?.source || !selected.target) return; resolve.mutate({ suspectedSubmissionId: selected.source.id, targetSubmissionId: selected.target.id, action, reason: reason || undefined }); };
+  const takeAction = (action: ConflictAction) => { if (!tenantId || !selected?.source || !selected.target) return; resolve.mutate({ tenantId, suspectedSubmissionId: selected.source.id, targetSubmissionId: selected.target.id, action, reason: reason || undefined }); };
   const source = selected?.source;
   const target = selected?.target;
   return <>

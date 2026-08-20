@@ -6,13 +6,18 @@ import { ThemeProvider } from "./contexts/ThemeContext";
 import Conflicts from "./pages/Conflicts";
 import FormBuilder from "./pages/FormBuilder";
 import Home from "./pages/Home";
+import Landing from "./pages/Landing";
 import NotFound from "./pages/NotFound";
 import Projects from "./pages/Projects";
+import Spaces from "./pages/Spaces";
 
 function Router() {
   return (
     <Switch>
-      <Route path="/" component={Home} />
+      <Route path="/" component={Landing} />
+      <Route path="/app" component={Home} />
+      <Route path="/spaces" component={Spaces} />
+      <Route path="/superadmin" component={Spaces} />
       <Route path="/projects" component={Projects} />
       <Route path="/forms" component={FormBuilder} />
       <Route path="/conflicts" component={Conflicts} />

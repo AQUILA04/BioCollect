@@ -1,5 +1,8 @@
-export const USER_ROLES = ["Administrateur", "Superviseur", "Enquêteur"] as const;
+export const USER_ROLES = ["Superadmin", "Administrateur", "Superviseur", "Enquêteur"] as const;
 export type UserRole = (typeof USER_ROLES)[number];
+
+export const TENANT_ROLES = ["Administrateur", "Superviseur", "Enquêteur"] as const;
+export type TenantRole = (typeof TENANT_ROLES)[number];
 
 export const SUBMISSION_STATUSES = [
   "DRAFT",
