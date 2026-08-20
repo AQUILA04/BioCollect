@@ -1,42 +1,52 @@
 # BioCollect
 
-**BioCollect** est une plateforme SaaS de collecte de données de terrain offline-first, conçue nativement pour intégrer la gestion des identités et la biométrie. Elle garantit l'unicité des dossiers collectés (déduplication) même dans des environnements sans connectivité.
+**BioCollect** est une plateforme de collecte de données terrain orientée identité, conçue pour enregistrer des dossiers hors connexion, associer des empreintes digitales stockées dans MinIO et traiter la déduplication biométrique de façon asynchrone.
 
-Ce dépôt est un **monorepo** contenant l'ensemble des applications et packages nécessaires au fonctionnement de la plateforme.
+## État du MVP
 
-## 🏗️ Structure du Monorepo
+Le MVP met en œuvre la gestion des projets biométriques, la conception de formulaires, la synchronisation protégée, le workflow de dossier, un mock autonome de déduplication, le tableau de supervision et la résolution de conflits. Les interfaces de supervision sont accessibles aux rôles **Administrateur** et **Superviseur**, tandis que les procédures de synchronisation sont réservées au rôle **Enquêteur**.
 
-Le projet est organisé de la manière suivante :
+| Zone | Responsabilité | Éléments implémentés |
+|---|---|---|
+| `apps/web` | Back-office React | Tableau de bord, projets, Form Builder et résolution de conflits |
+| `apps/api` | API TypeScript | Schéma Drizzle, RBAC, synchronisation Pull/Push et mock ScaleBiometrics |
+| `apps/mobile` | Client terrain React Native | Service offline de file d’attente et de synchronisation indépendant du framework |
+| `packages/form-engine` | Logique de formulaires | Évaluation des règles de visibilité conditionnelle |
+| `packages/biometric-sdk-bridge` | Abstraction matérielle | Contrat de provider biométrique pour Miaxis et fournisseurs futurs |
+| `contracts` | Contrats inter-applications | Contrat de synchronisation versionné |
 
-```text
-BioCollect/
-├── apps/
-│   ├── mobile/         # Application Android (React Native) pour les enquêteurs terrain
-│   ├── web/            # Back-office (React/Next.js) pour les administrateurs et superviseurs
-│   └── api/            # Backend Core (Spring Boot/NestJS) gérant les formulaires et la synchro
-├── packages/
-│   ├── biometric-sdk-bridge/ # Pont natif React Native (Java/Kotlin) pour les scanners (Miaxis, etc.)
-│   └── form-engine/    # Moteur de rendu de formulaires partagé entre web et mobile
-└── docs/               # Documentation technique et spécifications (PRD, Architecture, etc.)
+## Pré-requis et commandes
+
+Le monorepo nécessite Node.js 22 et pnpm 10. Après avoir cloné le dépôt, l’installation, la vérification statique et la suite de tests s’exécutent depuis la racine.
+
+```bash
+pnpm install
+pnpm check
+pnpm test
+pnpm dev
 ```
 
-## 🚀 Fonctionnalités Principales
+La commande `pnpm dev` démarre l’API et son intégration Vite avec le back-office. La commande `pnpm mobile:start` est prévue pour lancer le shell Expo lorsque l’environnement mobile est installé.
 
-*   **Offline-First** : Collecte de données et capture biométrique sans connexion internet.
-*   **Multi-Vendor Biometrics** : Abstraction permettant de supporter plusieurs fabricants de scanners. Le premier fournisseur intégré est **Miaxis** (SM-91M/SM-92M).
-*   **Déduplication Automatique** : Intégration native avec **ScaleBiometrics** pour identifier les doublons dès la synchronisation.
-*   **Résolution de Conflits** : Interface back-office dédiée pour gérer les cas de doublons suspectés.
+## Modèle métier
 
-## 📚 Documentation
+Les tables principales sont `Project`, `FormSchema`, `BiometricConfig`, `Submission`, `BiometricAttachment` et `ConflictResolution`. Les images d’empreintes ne sont jamais stockées en base : chaque `BiometricAttachment` ne conserve qu’un chemin `minio://` et les métadonnées de qualité NFIQ.
 
-Pour comprendre la vision, l'architecture et les choix techniques, veuillez consulter les documents suivants dans le dossier `docs/` :
+| Élément | Valeurs et règles |
+|---|---|
+| Rôles | `Administrateur`, `Superviseur`, `Enquêteur` |
+| Statuts de dossier | `DRAFT` → `SYNCED` → `PROCESSING` → `VALIDATED` ou `SUSPECTED_DUPLICATE` → `REJECTED` |
+| Actions de conflit | `Rejeter`, `Fusionner`, `Forcer Faux Positif` |
+| Contrôle de qualité | Les empreintes soumises doivent respecter les doigts requis, le seuil NFIQ et un chemin MinIO valide |
 
-*   [PRD (Product Requirements Document)](docs/PRD.md)
-*   [Architecture Technique](docs/ARCHITECTURE.md)
-*   [Spécifications Fonctionnelles](docs/FUNCTIONAL_SPECS.md)
-*   [Spécifications Techniques](docs/TECHNICAL_SPECS.md)
-*   [Spécifications Visuelles & UX](docs/VISUAL_SPECS.md)
+## Synchronisation et mock de déduplication
 
-## 🛠️ Installation et Développement
+Le contrat `contracts/sync.v1.md` décrit les opérations `biocollect.sync.pull` et `biocollect.sync.push`. La procédure Push crée le dossier, le fait progresser vers `SYNCED` puis `PROCESSING`, et déclenche le mock sans dépendance externe. Lorsqu’un dossier `VALIDATED` existe déjà sur le même projet, un chemin MinIO contenant `duplicate` produit un résultat `MATCH` déterministe ; le dossier entrant passe alors à `SUSPECTED_DUPLICATE`. Tous les autres scénarios produisent `NO_MATCH` et passent à `VALIDATED`.
 
-*(Les instructions de lancement pour chaque application seront ajoutées au fur et à mesure de l'initialisation des sous-projets).*
+## Base de données et tests
+
+La migration PostgreSQL de référence est disponible dans `apps/api/db/postgres/0001_biocollect_mvp.sql`. Elle définit les six tables du MVP avec des types ENUM, JSONB, contraintes de qualité et index. Le runtime de prévisualisation utilise la base relationnelle gérée disponible dans l’environnement ; sa migration Drizzle équivalente est placée dans `apps/api/drizzle`.
+
+Le test de la plateforme couvre les transitions interdites, le mock de déduplication, la validation des chemins MinIO, les autorisations de rôles, le pipeline Push complet et les décisions de conflit. La suite Vitest contient actuellement **13 tests**.
+
+Les choix d’architecture complémentaires sont documentés dans [`docs/MONOREPO_IMPLEMENTATION.md`](docs/MONOREPO_IMPLEMENTATION.md), et les spécifications produit d’origine restent disponibles dans le dossier [`docs`](docs).

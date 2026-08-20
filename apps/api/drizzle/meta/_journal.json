@@ -1,0 +1,20 @@
+{
+  "version": "7",
+  "dialect": "mysql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "5",
+      "when": 1787254952475,
+      "tag": "0000_parallel_iron_monger",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "5",
+      "when": 1787255191114,
+      "tag": "0001_smooth_otto_octavius",
+      "breakpoints": true
+    }
+  ]
+}
