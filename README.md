@@ -57,3 +57,7 @@ Les choix d’architecture complémentaires sont documentés dans [`docs/MONOREP
 ## Internationalisation
 
 Le back-office et l’application terrain partagent le package `@biocollect/i18n`. Le français et l’anglais sont disponibles par défaut, avec détection et persistance locale du choix de langue. Le guide [`docs/I18N.md`](docs/I18N.md) détaille le contrat TypeScript, les tests et l’ajout d’une langue.
+
+## Intégration continue et images
+
+La pipeline GitHub Actions applique les checks TypeScript, les suites Vitest, le build API/back-office et l’export web Expo avant toute publication de l’image composite API + back-office sur GHCR. Le détail des tags, des permissions et des quality gates est disponible dans [`docs/CI-CD.md`](docs/CI-CD.md).

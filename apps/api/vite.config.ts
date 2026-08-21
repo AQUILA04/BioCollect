@@ -150,7 +150,10 @@ function vitePluginManusDebugCollector(): Plugin {
   };
 }
 
-const plugins = [react(), tailwindcss(), jsxLocPlugin(), vitePluginManusRuntime(), vitePluginManusDebugCollector()];
+// Certains plugins embarqués exposent leurs types depuis une version antérieure de Vite.
+// Le contrat runtime est compatible et vérifié par le build Vite ; ce cast évite de mélanger
+// deux déclarations nominales de Plugin pendant le contrôle TypeScript du monorepo.
+const plugins = [react(), tailwindcss(), jsxLocPlugin(), vitePluginManusRuntime(), vitePluginManusDebugCollector()] as unknown as Plugin[];
 
 export default defineConfig({
   plugins,
