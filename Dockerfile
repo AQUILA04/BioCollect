@@ -5,17 +5,8 @@ WORKDIR /app
 ENV PNPM_HOME=/pnpm
 ENV PATH=$PNPM_HOME:$PATH
 
-COPY package.json pnpm-lock.yaml ./
-COPY apps/api/package.json apps/api/package.json
-COPY apps/mobile/package.json apps/mobile/package.json
-COPY apps/web/package.json apps/web/package.json
-COPY packages/form-engine/package.json packages/form-engine/package.json
-COPY packages/biometric-sdk-bridge/package.json packages/biometric-sdk-bridge/package.json
-COPY packages/i18n/package.json packages/i18n/package.json
-
-RUN corepack enable && pnpm install --frozen-lockfile
-
 COPY . .
+RUN corepack enable && pnpm install --frozen-lockfile
 RUN pnpm generate:locales && pnpm --dir apps/api build
 
 FROM node:22-bookworm-slim AS runner
