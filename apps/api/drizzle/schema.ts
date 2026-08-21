@@ -65,6 +65,7 @@ export const formSchemas = mysqlTable("formSchemas", {
   name: varchar("name", { length: 160 }).notNull(),
   version: int("version").default(1).notNull(),
   fields: json("fields").notNull(),
+  steps: json("steps"),
   isPublished: boolean("isPublished").default(false).notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),

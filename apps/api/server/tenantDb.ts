@@ -1,7 +1,7 @@
 import { and, desc, eq } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { biometricAttachments, biometricConfigs, formSchemas, projects, submissions, tenantMemberships, tenants, users } from "../drizzle/schema";
-import type { BiometricAttachmentInput, FormField, TenantRole, UserRole } from "../shared/biocollect";
+import type { BiometricAttachmentInput, FormField, FormStep, TenantRole, UserRole } from "../shared/biocollect";
 import { getDb } from "./db";
 
 async function requireDb() {
@@ -100,13 +100,13 @@ export async function listTenantForms(tenantId: string, projectId: string) {
   return db.select().from(formSchemas).where(eq(formSchemas.projectId, projectId)).orderBy(desc(formSchemas.version));
 }
 
-export async function createTenantForm(input: { tenantId: string; projectId: string; name: string; fields: FormField[]; isPublished: boolean }) {
+export async function createTenantForm(input: { tenantId: string; projectId: string; name: string; fields: FormField[]; steps?: FormStep[]; isPublished: boolean }) {
   if (!await getTenantProjectConfiguration(input.tenantId, input.projectId)) throw new Error("Projet introuvable dans cet espace.");
   const db = await requireDb();
   const prior = await db.select({ version: formSchemas.version }).from(formSchemas).where(eq(formSchemas.projectId, input.projectId)).orderBy(desc(formSchemas.version)).limit(1);
   const id = nanoid(20);
   const version = (prior[0]?.version ?? 0) + 1;
-  await db.insert(formSchemas).values({ id, projectId: input.projectId, name: input.name, fields: input.fields, isPublished: input.isPublished, version });
+  await db.insert(formSchemas).values({ id, projectId: input.projectId, name: input.name, fields: input.fields, steps: input.steps ?? null, isPublished: input.isPublished, version });
   return { id, version };
 }
 

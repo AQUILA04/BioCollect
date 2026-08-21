@@ -1,5 +1,6 @@
-export type BiometricStatus = "DRAFT" | "SYNCED" | "PROCESSING" | "VALIDATED" | "SUSPECTED_DUPLICATE" | "REJECTED";
+import type { BioCollectFormStep } from "@biocollect/form-engine";
 
+export type BiometricStatus = "DRAFT" | "SYNCED" | "PROCESSING" | "VALIDATED" | "SUSPECTED_DUPLICATE" | "REJECTED";
 export type FieldType = "text" | "date" | "multiple choice" | "photo";
 
 export type FormField = {
@@ -14,6 +15,7 @@ export type FormDefinition = {
   id: string;
   name: string;
   fields: FormField[];
+  steps?: BioCollectFormStep[];
 };
 
 export type ProjectSnapshot = {
@@ -47,6 +49,17 @@ export type QueuedSubmission = {
   retryCount: number;
 };
 
+export type FormDraft = {
+  id: string;
+  tenantId: string;
+  projectId: string;
+  formId: string;
+  currentStepId: string;
+  data: Record<string, string>;
+  attachments: BiometricAttachment[];
+  updatedAt: number;
+};
+
 export type AgentSession = {
   accessToken: string;
   tenantId: string;
@@ -57,6 +70,7 @@ export type OfflineState = {
   session: AgentSession | null;
   projects: ProjectSnapshot[];
   queue: QueuedSubmission[];
+  drafts: FormDraft[];
 };
 
-export const emptyOfflineState = (): OfflineState => ({ session: null, projects: [], queue: [] });
+export const emptyOfflineState = (): OfflineState => ({ session: null, projects: [], queue: [], drafts: [] });

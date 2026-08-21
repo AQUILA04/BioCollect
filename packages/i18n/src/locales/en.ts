@@ -1,6 +1,7 @@
 import type { Translation } from "../types";
 
 export const en: Translation = {
+  steps: { title: "Form steps", description: "Organize the collection journey and assign fields to each step.", create: "Add step", newStep: "New step", label: "Step name", fields: "Fields", biometrics: "Biometric captures", addBiometrics: "Add biometric step", moveUp: "Move up", moveDown: "Move down", remove: "Remove step", select: "Select a step", noFields: "No fields in this step.", assignField: "Collection step", cannotDelete: "Move or remove the fields before deleting this step.", invalid: "Every field must belong to a step and steps must be ordered.", progress: "Step {current} of {total}", previous: "Previous", next: "Next", completeStep: "Complete the required information to continue.", draftSaved: "Draft saved on this device.", finalize: "Save record", biometricDescription: "Complete the biometric captures required for this survey." },
   meta: { name: "English", direction: "ltr" },
   common: { language: "Language", french: "Français", english: "English", chooseLanguage: "Choose language", back: "Back", cancel: "Cancel", menu: "Menu", loading: "Loading…", save: "Save", close: "Close", status: "Status", requiredInformation: "Required information", requiredField: "Required field", signOut: "Sign out" },
   auth: { signIn: "Sign in", signOut: "Sign out", continue: "Sign in to continue", protectedArea: "BioCollect back-office access requires authentication." },

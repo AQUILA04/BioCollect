@@ -33,6 +33,16 @@ export type FormField = {
   };
 };
 
+export const FORM_STEP_KINDS = ["fields", "biometrics"] as const;
+export type FormStepKind = (typeof FORM_STEP_KINDS)[number];
+export type FormStep = {
+  id: string;
+  label: string;
+  order: number;
+  kind: FormStepKind;
+  fieldIds: string[];
+};
+
 export type BiometricAttachmentInput = {
   fingerType: string;
   minioPath: string;

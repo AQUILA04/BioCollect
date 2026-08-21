@@ -11,7 +11,7 @@ class MemoryStore implements KeyValueStore {
 
 const project: ProjectSnapshot = { projectId: "project-1", projectName: "Collecte pilote", requiredFingers: ["RIGHT_THUMB"], nfiqThreshold: 3, matchingThreshold: 85, forms: [], downloadedAt: 0 };
 const submission = (id: string): QueuedSubmission => ({ id, tenantId: "tenant-1", projectId: "project-1", formId: "form-1", data: { name: "Awa" }, attachments: [], status: "DRAFT", queuedAt: 1, retryCount: 0 });
-const state = (queue: QueuedSubmission[] = []): OfflineState => ({ session: { tenantId: "tenant-1", accessToken: "token", agentName: "Agent" }, projects: [], queue });
+const state = (queue: QueuedSubmission[] = []): OfflineState => ({ session: { tenantId: "tenant-1", accessToken: "token", agentName: "Agent" }, projects: [], queue, drafts: [] });
 
 describe("SyncService mobile", () => {
   it("télécharge et persiste les formulaires associés au tenant actif", async () => {
@@ -33,6 +33,6 @@ describe("SyncService mobile", () => {
   it("refuse une synchronisation si la session agent est absente", async () => {
     const storage = new OfflineStore(new MemoryStore());
     const transport: SyncTransport = { pull: async () => ({ projects: [], serverTime: 0 }), push: async () => ({ acceptedSubmissionIds: [], rejected: [] }) };
-    await expect(new SyncService(storage, transport).pull({ session: null, projects: [], queue: [] })).rejects.toThrow("Session agent requise");
+    await expect(new SyncService(storage, transport).pull({ session: null, projects: [], queue: [], drafts: [] })).rejects.toThrow("Session agent requise");
   });
 });

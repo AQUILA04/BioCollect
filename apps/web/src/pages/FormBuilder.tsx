@@ -1,19 +1,20 @@
-import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
-import { trpc } from "@/lib/trpc";
-import { useTenant } from "@/contexts/TenantContext";
 import { useI18n } from "@/contexts/I18nContext";
-import type { FormField, FormFieldType } from "../../../api/shared/biocollect";
-import { CalendarDays, CheckSquare2, GripVertical, Image, Loader2, Plus, Type } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useTenant } from "@/contexts/TenantContext";
+import { trpc } from "@/lib/trpc";
+import { fieldsForStep, validateFormSteps } from "@biocollect/form-engine";
 import type { TranslationKey } from "@biocollect/i18n";
+import { CalendarDays, CheckSquare2, ChevronDown, ChevronUp, Fingerprint, GripVertical, Image, Layers3, Loader2, Plus, Type } from "lucide-react";
+import { useMemo, useState } from "react";
 import { toast } from "sonner";
+import type { FormField, FormFieldType, FormStep } from "../../../api/shared/biocollect";
 import DashboardLayout from "../components/DashboardLayout";
+import { PageHeader } from "../components/PageHeader";
 
 const fieldOptions = (t: (key: TranslationKey) => string): { type: FormFieldType; label: string; icon: typeof Type }[] => [
   { type: "text", label: t("forms.text"), icon: Type },
@@ -22,15 +23,12 @@ const fieldOptions = (t: (key: TranslationKey) => string): { type: FormFieldType
   { type: "photo", label: t("forms.photo"), icon: Image },
 ];
 
-function newField(type: FormFieldType, t: (key: TranslationKey, values?: Record<string, string | number>) => string): FormField {
-  return {
-    id: `field_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
-    label: t("forms.newField", { type }),
-    type,
-    required: false,
-    options: type === "multiple choice" ? [t("forms.optionOne"), t("forms.optionTwo")] : undefined,
-  };
-}
+const makeId = (prefix: string) => `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+const newField = (type: FormFieldType, t: (key: TranslationKey, values?: Record<string, string | number>) => string): FormField => ({
+  id: makeId("field"), label: t("forms.newField", { type }), type, required: false,
+  options: type === "multiple choice" ? [t("forms.optionOne"), t("forms.optionTwo")] : undefined,
+});
+const newStep = (label: string): FormStep => ({ id: makeId("step"), label, order: 0, kind: "fields", fieldIds: [] });
 
 function isVisible(field: FormField, values: Record<string, string>) {
   if (!field.condition) return true;
@@ -48,7 +46,9 @@ function FormBuilderContent() {
   const [projectId, setProjectId] = useState("");
   const [name, setName] = useState(() => t("forms.enrollmentForm"));
   const [fields, setFields] = useState<FormField[]>([]);
+  const [steps, setSteps] = useState<FormStep[]>(() => [newStep(t("steps.newStep"))]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedStepId, setSelectedStepId] = useState<string>(() => steps[0]?.id ?? "");
   const [draggedFieldId, setDraggedFieldId] = useState<string | null>(null);
   const [draggedPaletteType, setDraggedPaletteType] = useState<FormFieldType | null>(null);
   const [previewValues, setPreviewValues] = useState<Record<string, string>>({});
@@ -58,64 +58,64 @@ function FormBuilderContent() {
   });
 
   const selected = useMemo(() => fields.find(field => field.id === selectedId) ?? null, [fields, selectedId]);
-  const visibleFields = useMemo(() => fields.filter(field => isVisible(field, previewValues)), [fields, previewValues]);
-  const conditionDrivers = useMemo(() => fields.filter(field => fields.some(candidate => candidate.condition?.fieldId === field.id)), [fields]);
+  const selectedStep = useMemo(() => steps.find(step => step.id === selectedStepId) ?? steps[0] ?? null, [steps, selectedStepId]);
+  const orderedSteps = useMemo(() => [...steps].sort((left, right) => left.order - right.order), [steps]);
+  const stepFields = useMemo(() => selectedStep ? fieldsForStep(fields, selectedStep).filter(field => isVisible(field, previewValues)) : [], [fields, selectedStep, previewValues]);
 
-  function updateField(id: string, patch: Partial<FormField>) {
-    setFields(current => current.map(field => field.id === id ? { ...field, ...patch } : field));
+  function normalize(next: FormStep[]) { setSteps(next.map((step, index) => ({ ...step, order: index }))); }
+  function updateField(id: string, patch: Partial<FormField>) { setFields(current => current.map(field => field.id === id ? { ...field, ...patch } : field)); }
+  function updateStep(id: string, patch: Partial<FormStep>) { setSteps(current => current.map(step => step.id === id ? { ...step, ...patch } : step)); }
+  function addStep(kind: FormStep["kind"] = "fields") {
+    if (kind === "biometrics" && steps.some(step => step.kind === "biometrics")) return;
+    const step = { ...newStep(kind === "biometrics" ? t("steps.biometrics") : t("steps.newStep")), kind };
+    normalize([...orderedSteps, step]); setSelectedStepId(step.id);
   }
-
+  function moveStep(id: string, direction: -1 | 1) {
+    const index = orderedSteps.findIndex(step => step.id === id); const target = index + direction;
+    if (target < 0 || target >= orderedSteps.length) return;
+    const next = [...orderedSteps]; [next[index], next[target]] = [next[target], next[index]]; normalize(next);
+  }
+  function removeStep(step: FormStep) {
+    if (step.fieldIds.length || orderedSteps.length === 1) return toast.error(t("steps.cannotDelete"));
+    const next = orderedSteps.filter(item => item.id !== step.id); normalize(next); setSelectedStepId(next[0]?.id ?? "");
+  }
+  function assignField(fieldId: string, stepId: string) {
+    setSteps(current => current.map(step => ({ ...step, fieldIds: step.id === stepId ? [...step.fieldIds.filter(id => id !== fieldId), fieldId] : step.fieldIds.filter(id => id !== fieldId) })));
+  }
   function addField(type: FormFieldType) {
-    const field = newField(type, t);
-    setFields(current => [...current, field]);
-    setSelectedId(field.id);
+    if (!selectedStep || selectedStep.kind !== "fields") return toast.error(t("steps.select"));
+    const field = newField(type, t); setFields(current => [...current, field]); assignField(field.id, selectedStep.id); setSelectedId(field.id);
   }
-
   function placeDraggedField(targetId?: string) {
-    if (draggedPaletteType) {
-      const field = newField(draggedPaletteType, t);
-      setFields(current => {
-        const targetIndex = targetId ? current.findIndex(item => item.id === targetId) : current.length;
-        return [...current.slice(0, targetIndex), field, ...current.slice(targetIndex)];
-      });
-      setSelectedId(field.id);
-    }
-    if (draggedFieldId && targetId && draggedFieldId !== targetId) {
-      setFields(current => {
-        const sourceIndex = current.findIndex(item => item.id === draggedFieldId);
-        const targetIndex = current.findIndex(item => item.id === targetId);
-        const next = [...current];
-        const [moved] = next.splice(sourceIndex, 1);
-        next.splice(targetIndex, 0, moved);
-        return next;
-      });
-    }
-    setDraggedFieldId(null);
-    setDraggedPaletteType(null);
+    if (draggedPaletteType) addField(draggedPaletteType);
+    if (draggedFieldId && targetId && draggedFieldId !== targetId) setFields(current => {
+      const sourceIndex = current.findIndex(item => item.id === draggedFieldId); const targetIndex = current.findIndex(item => item.id === targetId);
+      const next = [...current]; const [moved] = next.splice(sourceIndex, 1); next.splice(targetIndex, 0, moved); return next;
+    });
+    setDraggedFieldId(null); setDraggedPaletteType(null);
   }
-
   function publish() {
     if (!projectId) return toast.error(t("forms.selectProjectFirst"));
     if (!fields.length) return toast.error(t("forms.addFieldFirst"));
     if (!tenantId) return toast.error(t("forms.selectTenantFirst"));
-    save.mutate({ tenantId, projectId, name, fields, isPublished: true });
+    if (validateFormSteps(fields, orderedSteps).length) return toast.error(t("steps.invalid"));
+    save.mutate({ tenantId, projectId, name, fields, steps: orderedSteps, isPublished: true });
   }
 
   return <>
     <PageHeader eyebrow={t("forms.eyebrow")} title={t("forms.title")} description={t("forms.description")} action={<Button onClick={publish} disabled={save.isPending}>{save.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}{t("forms.publish")}</Button>} />
-    {projects.isError ? <Card className="mb-5 border-rose-200"><CardContent className="p-4 text-sm text-rose-700">{t("forms.projectLoadFailed")} : {projects.error.message}</CardContent></Card> : null}
     <div className="mb-5 grid gap-4 lg:grid-cols-[1fr_2fr]">
-      <div className="grid gap-2"><Label htmlFor="builder-project">{t("forms.project")}</Label><select id="builder-project" disabled={projects.isLoading || projects.isError} value={projectId} onChange={event => setProjectId(event.target.value)} className="h-10 rounded-md border border-input bg-background px-3 text-sm"><option value="">{projects.isLoading ? t("forms.loadingProjects") : t("forms.selectProject")}</option>{projects.data?.map(project => <option key={project.id} value={project.id}>{project.name}</option>)}</select></div>
+      <div className="grid gap-2"><Label htmlFor="builder-project">{t("forms.project")}</Label><select id="builder-project" disabled={projects.isLoading} value={projectId} onChange={event => setProjectId(event.target.value)} className="h-10 rounded-md border border-input bg-background px-3 text-sm"><option value="">{projects.isLoading ? t("forms.loadingProjects") : t("forms.selectProject")}</option>{projects.data?.map(project => <option key={project.id} value={project.id}>{project.name}</option>)}</select></div>
       <div className="grid gap-2"><Label htmlFor="form-name">{t("forms.formName")}</Label><Input id="form-name" value={name} onChange={event => setName(event.target.value)} minLength={3} /></div>
     </div>
+    <div className="mb-5 grid gap-5 lg:grid-cols-[minmax(0,1fr)_310px]">
+      <Card><CardContent className="p-5"><div className="mb-4 flex flex-wrap items-start justify-between gap-3"><div><p className="text-xs font-semibold uppercase tracking-wider text-blue-700">{t("steps.title")}</p><p className="mt-1 text-sm text-slate-500">{t("steps.description")}</p></div><div className="flex gap-2"><Button size="sm" variant="outline" onClick={() => addStep()}><Plus className="mr-1 h-4 w-4" />{t("steps.create")}</Button><Button size="sm" variant="outline" disabled={steps.some(step => step.kind === "biometrics")} onClick={() => addStep("biometrics")}><Fingerprint className="mr-1 h-4 w-4" />{t("steps.addBiometrics")}</Button></div></div><div className="grid gap-2">{orderedSteps.map((step, index) => <button key={step.id} onClick={() => setSelectedStepId(step.id)} className={`flex min-h-14 items-center gap-3 rounded-lg border p-3 text-left ${step.id === selectedStepId ? "border-blue-500 bg-blue-50" : "border-slate-200 bg-white hover:border-slate-300"}`}><span className="flex h-7 w-7 items-center justify-center rounded-full bg-slate-100 text-xs font-bold text-slate-600">{index + 1}</span>{step.kind === "biometrics" ? <Fingerprint className="h-4 w-4 text-blue-700" /> : <Layers3 className="h-4 w-4 text-blue-700" />}<span className="min-w-0 flex-1"><span className="block truncate font-medium text-slate-900">{step.label}</span><span className="block text-xs text-slate-500">{step.kind === "biometrics" ? t("steps.biometrics") : `${step.fieldIds.length} ${t("steps.fields").toLowerCase()}`}</span></span><span className="flex gap-1"><Button size="icon" variant="ghost" disabled={index === 0} onClick={event => { event.stopPropagation(); moveStep(step.id, -1); }} aria-label={t("steps.moveUp")}><ChevronUp className="h-4 w-4" /></Button><Button size="icon" variant="ghost" disabled={index === orderedSteps.length - 1} onClick={event => { event.stopPropagation(); moveStep(step.id, 1); }} aria-label={t("steps.moveDown")}><ChevronDown className="h-4 w-4" /></Button></span></button>)}</div></CardContent></Card>
+      <Card className="h-fit"><CardContent className="grid gap-3 p-5">{selectedStep ? <><div className="grid gap-2"><Label htmlFor="step-label">{t("steps.label")}</Label><Input id="step-label" value={selectedStep.label} onChange={event => updateStep(selectedStep.id, { label: event.target.value })} /></div><p className="text-sm text-slate-500">{selectedStep.kind === "biometrics" ? t("steps.biometricDescription") : t("steps.assignField")}</p><Button variant="ghost" className="justify-start text-rose-700 hover:bg-rose-50 hover:text-rose-800" onClick={() => removeStep(selectedStep)}>{t("steps.remove")}</Button></> : null}</CardContent></Card>
+    </div>
     <div className="grid gap-5 xl:grid-cols-[220px_minmax(0,1fr)_300px]">
-      <Card className="h-fit"><CardContent className="p-4"><p className="mb-3 text-xs font-semibold uppercase tracking-wider text-slate-500">{t("forms.fields")}</p><p className="mb-3 text-xs leading-5 text-slate-500">{t("forms.paletteHelp")}</p><div className="grid gap-2">{fieldOptions(t).map(({ type, label, icon: Icon }) => <Button key={type} variant="outline" draggable className="justify-start" onDragStart={() => { setDraggedPaletteType(type); setDraggedFieldId(null); }} onDragEnd={() => { setDraggedPaletteType(null); setDraggedFieldId(null); }} onClick={() => addField(type)}><Icon className="mr-2 h-4 w-4 text-blue-600" />{label}</Button>)}</div></CardContent></Card>
-      <Card className="min-h-[520px] border-slate-300 bg-slate-50/60"><CardContent onDragOver={event => event.preventDefault()} onDrop={() => placeDraggedField()} className="mx-auto max-w-2xl p-5 sm:p-8">
-        <div className="mb-6 flex items-center justify-between"><div><p className="text-xs font-semibold uppercase tracking-wider text-blue-700">{t("forms.preview")}</p><h2 className="mt-1 font-semibold text-slate-950">{name || t("forms.unnamedForm")}</h2></div><span className="rounded-full bg-white px-3 py-1 text-xs font-medium text-slate-500 shadow-sm">{visibleFields.length}/{fields.length} {t("forms.visible")}</span></div>
-        {conditionDrivers.length ? <div className="mb-4 rounded-lg border border-blue-100 bg-blue-50 p-3"><p className="text-xs font-semibold text-blue-800">{t("forms.conditionalSimulation")}</p><div className="mt-2 flex flex-wrap gap-2">{conditionDrivers.map(field => <Button key={field.id} size="sm" variant={previewValues[field.id] ? "default" : "outline"} onClick={() => setPreviewValues(current => ({ ...current, [field.id]: current[field.id] ? "" : t("forms.testValue") }))}>{field.label} : {previewValues[field.id] ? t("forms.filled") : t("forms.empty")}</Button>)}</div></div> : null}
-        {fields.length === 0 ? <div className="flex min-h-80 flex-col items-center justify-center rounded-xl border border-dashed border-slate-300 bg-white text-center"><Plus className="mb-3 h-7 w-7 text-blue-600" /><p className="font-medium">{t("forms.addFirstField")}</p><p className="mt-1 max-w-xs text-sm text-slate-500">{t("forms.useLeftColumn")}</p></div> : <div className="grid gap-3">{visibleFields.map(field => <button key={field.id} draggable onDragStart={() => { setDraggedFieldId(field.id); setDraggedPaletteType(null); }} onDragEnd={() => { setDraggedFieldId(null); setDraggedPaletteType(null); }} onDragOver={event => event.preventDefault()} onDrop={event => { event.stopPropagation(); placeDraggedField(field.id); }} onClick={() => setSelectedId(field.id)} className={`rounded-lg border bg-white p-4 text-left transition-shadow focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 ${selectedId === field.id ? "border-blue-500 shadow-sm" : "border-slate-200 hover:border-slate-300"}`}><div className="flex gap-3"><GripVertical className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" /><div className="min-w-0 flex-1"><div className="flex items-center justify-between gap-3"><span className="font-medium text-slate-900">{field.label}</span>{field.required ? <span className="text-xs font-medium text-rose-600">{t("forms.required")}</span> : null}</div><p className="mt-1 text-xs text-slate-500">{field.type}</p>{field.type === "multiple choice" ? <div className="mt-3 flex flex-wrap gap-2">{field.options?.map(option => <span key={option} className="rounded bg-slate-100 px-2 py-1 text-xs text-slate-600">{option}</span>)}</div> : <div className="mt-3 h-9 rounded border border-slate-200 bg-slate-50" />}</div></div></button>)}</div>}
-      </CardContent></Card>
-      <Card className="h-fit"><CardContent className="p-4">{selected ? <div className="grid gap-4"><div><p className="text-xs font-semibold uppercase tracking-wider text-slate-500">{t("forms.properties")}</p><h2 className="mt-1 font-semibold text-slate-950">{selected.type}</h2></div><div className="grid gap-2"><Label htmlFor="field-label">{t("forms.label")}</Label><Input id="field-label" value={selected.label} onChange={event => updateField(selected.id, { label: event.target.value })} /></div><div className="flex items-center justify-between gap-3"><Label htmlFor="field-required">{t("forms.requiredField")}</Label><Switch id="field-required" checked={selected.required} onCheckedChange={required => updateField(selected.id, { required })} /></div>{selected.type === "multiple choice" ? <div className="grid gap-2"><Label htmlFor="field-options">{t("forms.optionsPerLine")}</Label><Textarea id="field-options" value={selected.options?.join("\n") ?? ""} onChange={event => updateField(selected.id, { options: event.target.value.split("\n").map(item => item.trim()).filter(Boolean) })} /></div> : null}<div className="grid gap-2"><Label htmlFor="field-condition">{t("forms.showWhen")}</Label><select id="field-condition" value={selected.condition?.fieldId ?? ""} onChange={event => updateField(selected.id, { condition: event.target.value ? { fieldId: event.target.value, operator: "isFilled" } : undefined })} className="h-10 rounded-md border border-input bg-background px-3 text-sm"><option value="">{t("forms.alwaysVisible")}</option>{fields.filter(field => field.id !== selected.id).map(field => <option key={field.id} value={field.id}>{field.label} {t("forms.isFilled")}</option>)}</select></div><Button variant="ghost" className="justify-start text-rose-700 hover:bg-rose-50 hover:text-rose-800" onClick={() => { setFields(current => current.filter(field => field.id !== selected.id)); setSelectedId(null); }}>{t("forms.removeField")}</Button></div> : <div className="py-12 text-center text-sm text-slate-500">{t("forms.selectField")}</div>}</CardContent></Card>
+      <Card className="h-fit"><CardContent className="p-4"><p className="mb-3 text-xs font-semibold uppercase tracking-wider text-slate-500">{t("forms.fields")}</p><div className="grid gap-2">{fieldOptions(t).map(({ type, label, icon: Icon }) => <Button key={type} variant="outline" draggable className="justify-start" onDragStart={() => { setDraggedPaletteType(type); setDraggedFieldId(null); }} onDragEnd={() => { setDraggedPaletteType(null); setDraggedFieldId(null); }} onClick={() => addField(type)}><Icon className="mr-2 h-4 w-4 text-blue-600" />{label}</Button>)}</div></CardContent></Card>
+      <Card className="min-h-[520px] border-slate-300 bg-slate-50/60"><CardContent onDragOver={event => event.preventDefault()} onDrop={() => placeDraggedField()} className="mx-auto max-w-2xl p-5 sm:p-8"><div className="mb-6 flex items-center justify-between"><div><p className="text-xs font-semibold uppercase tracking-wider text-blue-700">{t("forms.preview")}</p><h2 className="mt-1 font-semibold text-slate-950">{selectedStep?.label ?? name}</h2></div><span className="rounded-full bg-white px-3 py-1 text-xs font-medium text-slate-500 shadow-sm">{selectedStep?.kind === "biometrics" ? t("steps.biometrics") : `${stepFields.length} ${t("steps.fields").toLowerCase()}`}</span></div>{selectedStep?.kind === "biometrics" ? <div className="rounded-xl border border-blue-100 bg-blue-50 p-6 text-sm text-blue-900"><Fingerprint className="mb-3 h-6 w-6" />{t("steps.biometricDescription")}</div> : stepFields.length === 0 ? <div className="flex min-h-80 flex-col items-center justify-center rounded-xl border border-dashed border-slate-300 bg-white text-center"><Plus className="mb-3 h-7 w-7 text-blue-600" /><p className="font-medium">{t("steps.noFields")}</p></div> : <div className="grid gap-3">{stepFields.map(field => <button key={field.id} draggable onDragStart={() => { setDraggedFieldId(field.id); setDraggedPaletteType(null); }} onDragEnd={() => { setDraggedFieldId(null); setDraggedPaletteType(null); }} onDragOver={event => event.preventDefault()} onDrop={event => { event.stopPropagation(); placeDraggedField(field.id); }} onClick={() => setSelectedId(field.id)} className={`rounded-lg border bg-white p-4 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 ${selectedId === field.id ? "border-blue-500 shadow-sm" : "border-slate-200 hover:border-slate-300"}`}><div className="flex gap-3"><GripVertical className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" /><div className="min-w-0 flex-1"><div className="flex items-center justify-between gap-3"><span className="font-medium text-slate-900">{field.label}</span>{field.required ? <span className="text-xs font-medium text-rose-600">{t("forms.required")}</span> : null}</div><p className="mt-1 text-xs text-slate-500">{field.type}</p></div></div></button>)}</div>}</CardContent></Card>
+      <Card className="h-fit"><CardContent className="p-4">{selected ? <div className="grid gap-4"><div><p className="text-xs font-semibold uppercase tracking-wider text-slate-500">{t("forms.properties")}</p><h2 className="mt-1 font-semibold text-slate-950">{selected.type}</h2></div><div className="grid gap-2"><Label htmlFor="field-label">{t("forms.label")}</Label><Input id="field-label" value={selected.label} onChange={event => updateField(selected.id, { label: event.target.value })} /></div><div className="grid gap-2"><Label htmlFor="field-step">{t("steps.assignField")}</Label><select id="field-step" value={orderedSteps.find(step => step.fieldIds.includes(selected.id))?.id ?? ""} onChange={event => assignField(selected.id, event.target.value)} className="h-10 rounded-md border border-input bg-background px-3 text-sm">{orderedSteps.filter(step => step.kind === "fields").map(step => <option key={step.id} value={step.id}>{step.label}</option>)}</select></div><div className="flex items-center justify-between gap-3"><Label htmlFor="field-required">{t("forms.requiredField")}</Label><Switch id="field-required" checked={selected.required} onCheckedChange={required => updateField(selected.id, { required })} /></div>{selected.type === "multiple choice" ? <div className="grid gap-2"><Label htmlFor="field-options">{t("forms.optionsPerLine")}</Label><Textarea id="field-options" value={selected.options?.join("\n") ?? ""} onChange={event => updateField(selected.id, { options: event.target.value.split("\n").map(item => item.trim()).filter(Boolean) })} /></div> : null}<div className="grid gap-2"><Label htmlFor="field-condition">{t("forms.showWhen")}</Label><select id="field-condition" value={selected.condition?.fieldId ?? ""} onChange={event => updateField(selected.id, { condition: event.target.value ? { fieldId: event.target.value, operator: "isFilled" } : undefined })} className="h-10 rounded-md border border-input bg-background px-3 text-sm"><option value="">{t("forms.alwaysVisible")}</option>{fields.filter(field => { const sourceStep = orderedSteps.findIndex(step => step.fieldIds.includes(field.id)); const targetStep = orderedSteps.findIndex(step => step.fieldIds.includes(selected.id)); return field.id !== selected.id && sourceStep >= 0 && sourceStep <= targetStep; }).map(field => <option key={field.id} value={field.id}>{field.label} {t("forms.isFilled")}</option>)}</select></div><Button variant="ghost" className="justify-start text-rose-700 hover:bg-rose-50 hover:text-rose-800" onClick={() => { setFields(current => current.filter(field => field.id !== selected.id)); setSteps(current => current.map(step => ({ ...step, fieldIds: step.fieldIds.filter(id => id !== selected.id) }))); setSelectedId(null); }}>{t("forms.removeField")}</Button></div> : <div className="py-12 text-center text-sm text-slate-500">{t("forms.selectField")}</div>}</CardContent></Card>
     </div>
   </>;
 }

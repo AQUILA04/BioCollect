@@ -4,7 +4,8 @@ import { createSyncedSubmission, resolveConflict } from "../db";
 import { isValidMinioPath } from "../biocollect/mockScaleBiometrics";
 import { runMockDeduplication } from "../biocollect/submissionPipeline";
 import { assertTenantProject, createTenant, createTenantForm, createTenantProject, getTenantDashboard, getTenantProjectConfiguration, getTenantSyncBundle, listAllTenants, listTenantConflictCases, listTenantForms, listTenantProjects, listUserTenants, requireTenantRole, selectActiveTenant, tenantOwnsSubmission, updateTenantBySuperadmin, updateTenantProjectConfiguration } from "../tenantDb";
-import { CONFLICT_ACTIONS, FORM_FIELD_TYPES, TENANT_ROLES } from "../../shared/biocollect";
+import { CONFLICT_ACTIONS, FORM_FIELD_TYPES, FORM_STEP_KINDS, TENANT_ROLES } from "../../shared/biocollect";
+import { validateFormSteps } from "@biocollect/form-engine";
 import { protectedProcedure, router, superadminProcedure } from "../_core/trpc";
 
 const tenantIdSchema = z.object({ tenantId: z.string().min(1) });
@@ -13,6 +14,10 @@ const formFieldSchema = z.object({
   id: z.string().min(1), label: z.string().min(1).max(160), type: z.enum(FORM_FIELD_TYPES), required: z.boolean(),
   options: z.array(z.string().min(1).max(120)).optional(),
   condition: z.object({ fieldId: z.string().min(1), operator: z.enum(["equals", "notEquals", "isFilled"]), value: z.string().optional() }).optional(),
+});
+const formStepSchema = z.object({
+  id: z.string().min(1).max(120), label: z.string().min(1).max(160), order: z.number().int().min(0).max(23),
+  kind: z.enum(FORM_STEP_KINDS), fieldIds: z.array(z.string().min(1).max(120)).max(100),
 });
 
 async function requireTenant(ctx: { user: { id: number; role: any } | null }, tenantId: string, allowed: (typeof TENANT_ROLES)[number][]) {
@@ -39,7 +44,11 @@ export const biocollectRouter = router({
   }),
   forms: router({
     list: protectedProcedure.input(projectIdSchema).query(async ({ ctx, input }) => { await requireTenant(ctx, input.tenantId, ["Administrateur", "Superviseur"]); return listTenantForms(input.tenantId, input.projectId); }),
-    create: protectedProcedure.input(z.object({ tenantId: z.string().min(1), projectId: z.string().min(1), name: z.string().min(3).max(160), fields: z.array(formFieldSchema).max(100), isPublished: z.boolean() })).mutation(async ({ ctx, input }) => { await requireTenant(ctx, input.tenantId, ["Administrateur"]); return createTenantForm(input); }),
+    create: protectedProcedure.input(z.object({ tenantId: z.string().min(1), projectId: z.string().min(1), name: z.string().min(3).max(160), fields: z.array(formFieldSchema).min(1).max(100), steps: z.array(formStepSchema).min(1).max(24).optional(), isPublished: z.boolean() })).mutation(async ({ ctx, input }) => {
+      await requireTenant(ctx, input.tenantId, ["Administrateur"]);
+      if (input.steps?.length && validateFormSteps(input.fields, input.steps).length) throw new TRPCError({ code: "BAD_REQUEST", message: "La structure des étapes du formulaire est invalide." });
+      return createTenantForm(input);
+    }),
   }),
   sync: router({
     pull: protectedProcedure.input(projectIdSchema).query(async ({ ctx, input }) => { await requireTenant(ctx, input.tenantId, ["Administrateur", "Superviseur", "Enquêteur"]); return getTenantSyncBundle(input.tenantId, input.projectId); }),

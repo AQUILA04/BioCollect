@@ -33,7 +33,7 @@ describe("API mobile Pull/Push", () => {
     const dependencies = createDependencies();
     const handlers = createMobileSyncHandlers(dependencies as any);
     const result = await handlers.pull(user, "tenant-1");
-    expect(result.projects).toEqual([{ projectId: "project-1", projectName: "Collecte pilote", requiredFingers: ["RIGHT_THUMB"], nfiqThreshold: 3, matchingThreshold: 85, downloadedAt: expect.any(Number), forms: [{ id: "form-1", name: "Enrôlement", fields: [] }] }]);
+    expect(result.projects).toEqual([{ projectId: "project-1", projectName: "Collecte pilote", requiredFingers: ["RIGHT_THUMB"], nfiqThreshold: 3, matchingThreshold: 85, downloadedAt: expect.any(Number), forms: [{ id: "form-1", name: "Enrôlement", fields: [], steps: [{ id: "legacy", label: "Enrôlement", order: 0, kind: "fields", fieldIds: [] }] }] }]);
     expect(dependencies.requireTenantRole).toHaveBeenCalledWith(expect.objectContaining({ tenantId: "tenant-1", userId: 7, allowed: expect.arrayContaining(["Enquêteur"]) }));
   });
 

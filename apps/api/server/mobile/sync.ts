@@ -7,6 +7,7 @@ import { getTenantProjectConfiguration, getTenantSyncBundle, listTenantProjects,
 import { sdk } from "../_core/sdk";
 import type { User } from "../../drizzle/schema";
 import type { TenantRole, UserRole } from "../../shared/biocollect";
+import { normalizeFormSteps } from "@biocollect/form-engine";
 
 const tenantIdSchema = z.string().min(1).max(80);
 const attachmentSchema = z.object({
@@ -64,7 +65,7 @@ export function createMobileSyncHandlers(dependencies: MobileDependencies = defa
         nfiqThreshold: bundle.biometricConfig.nfiqThreshold,
         matchingThreshold: bundle.biometricConfig.matchingThreshold,
         downloadedAt: Date.now(),
-        forms: [{ id: bundle.formSchema.id, name: bundle.formSchema.name, fields: bundle.formSchema.fields }],
+        forms: [{ id: bundle.formSchema.id, name: bundle.formSchema.name, fields: bundle.formSchema.fields, steps: normalizeFormSteps(bundle.formSchema.name, bundle.formSchema.fields as any[], bundle.formSchema.steps as any[] | null) }],
       }] : []),
     };
   }

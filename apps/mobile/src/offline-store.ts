@@ -20,6 +20,7 @@ export class OfflineStore {
         session: parsed.session ?? null,
         projects: parsed.projects ?? [],
         queue: parsed.queue ?? [],
+        drafts: parsed.drafts ?? [],
       };
     } catch {
       return emptyOfflineState();

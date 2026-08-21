@@ -13,6 +13,8 @@ export type BioCollectFormField = {
   condition?: FieldCondition;
 };
 
+export { fieldsForStep, normalizeFormSteps, validateFormSteps, type BioCollectFormStep, type FormStepKind } from "./steps";
+
 export function isFieldVisible(field: BioCollectFormField, values: Record<string, unknown>): boolean {
   if (!field.condition) return true;
   const value = values[field.condition.fieldId];
