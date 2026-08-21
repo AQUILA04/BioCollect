@@ -1,8 +1,8 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
-import { createSyncedSubmission, findValidatedReference, getSubmissionWithAttachments, resolveConflict, updateSubmissionStatus } from "../db";
-import { createMockWebhookResult, isValidMinioPath } from "../biocollect/mockScaleBiometrics";
-import { assertTransition } from "../biocollect/workflow";
+import { createSyncedSubmission, resolveConflict } from "../db";
+import { isValidMinioPath } from "../biocollect/mockScaleBiometrics";
+import { runMockDeduplication } from "../biocollect/submissionPipeline";
 import { assertTenantProject, createTenant, createTenantForm, createTenantProject, getTenantDashboard, getTenantProjectConfiguration, getTenantSyncBundle, listAllTenants, listTenantConflictCases, listTenantForms, listTenantProjects, listUserTenants, requireTenantRole, selectActiveTenant, tenantOwnsSubmission, updateTenantBySuperadmin, updateTenantProjectConfiguration } from "../tenantDb";
 import { CONFLICT_ACTIONS, FORM_FIELD_TYPES, TENANT_ROLES } from "../../shared/biocollect";
 import { protectedProcedure, router, superadminProcedure } from "../_core/trpc";
@@ -20,21 +20,6 @@ async function requireTenant(ctx: { user: { id: number; role: any } | null }, te
   const access = await requireTenantRole({ tenantId, userId: ctx.user.id, userRole: ctx.user.role, allowed });
   if (!access) throw new TRPCError({ code: "FORBIDDEN", message: "Vous n’avez pas accès à cet espace d’entité." });
   return access;
-}
-
-async function runMockDeduplication(submissionId: string) {
-  const synced = await getSubmissionWithAttachments(submissionId);
-  if (!synced) throw new TRPCError({ code: "NOT_FOUND", message: "Dossier introuvable." });
-  assertTransition("SYNCED", "PROCESSING");
-  await updateSubmissionStatus(submissionId, "PROCESSING");
-  const reference = await findValidatedReference(synced.projectId, submissionId);
-  const result = createMockWebhookResult(synced.attachments.map(item => item.minioPath), Boolean(reference));
-  if (result.outcome === "MATCH" && reference) {
-    assertTransition("PROCESSING", "SUSPECTED_DUPLICATE");
-    return updateSubmissionStatus(submissionId, "SUSPECTED_DUPLICATE", { matchedSubmissionId: reference.id, similarityScore: result.similarityScore });
-  }
-  assertTransition("PROCESSING", "VALIDATED");
-  return updateSubmissionStatus(submissionId, "VALIDATED", { matchedSubmissionId: null, similarityScore: null });
 }
 
 export const biocollectRouter = router({

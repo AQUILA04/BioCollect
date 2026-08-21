@@ -6,7 +6,7 @@ Application Expo/React Native destinée aux **Enquêteurs**. Elle comprend l’a
 
 ```bash
 pnpm install
-pnpm --dir apps/mobile start
+EXPO_PUBLIC_BIOCOLLECT_API_URL=http://localhost:3000 pnpm mobile:start
 ```
 
-Renseignez `expo.extra.biocollectApiUrl` dans `app.json` avec l’URL de l’API qui expose le contrat [mobile-sync.v1.md](../../contracts/mobile-sync.v1.md). Les tests de synchronisation et de parcours offline peuvent être lancés avec `pnpm --dir apps/mobile test`.
+La variable `EXPO_PUBLIC_BIOCOLLECT_API_URL` est injectée dans la configuration Expo et doit désigner l’API qui expose le contrat [mobile-sync.v1.md](../../contracts/mobile-sync.v1.md). Les tests de synchronisation et de parcours offline peuvent être lancés avec `pnpm --dir apps/mobile test`.

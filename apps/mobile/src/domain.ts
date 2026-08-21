@@ -31,6 +31,8 @@ export type BiometricAttachment = {
   type: "fingerprint" | "photo";
   minioPath: string;
   capturedAt: number;
+  fingerType?: string;
+  nfiqScore?: number;
 };
 
 export type QueuedSubmission = {

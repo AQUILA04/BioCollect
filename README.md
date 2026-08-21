@@ -30,7 +30,7 @@ La commande `pnpm dev` démarre l’API et son intégration Vite avec le back-of
 
 ## Application mobile terrain
 
-Le client `apps/mobile` met en œuvre le parcours Enquêteur : activation locale par tenant et jeton, téléchargement de projets et formulaires publiés, saisie offline, capture biométrique simulée avec référence `minio://`, file de dossiers persistée localement et reprise Pull/Push. Le protocole HTTP attendu est décrit dans [`contracts/mobile-sync.v1.md`](contracts/mobile-sync.v1.md). Les routes serveur correspondantes restent à raccorder au service API du monorepo.
+Le client `apps/mobile` met en œuvre le parcours Enquêteur : activation locale par tenant et jeton, téléchargement de projets et formulaires publiés, saisie offline, capture biométrique simulée avec référence `minio://`, file de dossiers persistée localement et reprise Pull/Push. Le protocole HTTP est décrit dans [`contracts/mobile-sync.v1.md`](contracts/mobile-sync.v1.md) et servi par l’API sur `GET /api/mobile/sync/pull` et `POST /api/mobile/sync/push` avec authentification Bearer et contrôle d’appartenance au tenant.
 
 ## Modèle métier
 

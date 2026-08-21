@@ -48,7 +48,7 @@ export function MobileProvider({ children }: { children: ReactNode }) {
   function createSimulatedAttachment(projectId: string, type: BiometricAttachment["type"], reference?: string): BiometricAttachment {
     const id = makeId(type);
     const objectName = reference ? `${type}_${reference}_${id}.bin` : `${id}.bin`;
-    return { id, type, minioPath: `minio://biocollect/${state.session?.tenantId ?? "unassigned"}/${projectId}/${objectName}`, capturedAt: Date.now() };
+    return { id, type, minioPath: `minio://biocollect/${state.session?.tenantId ?? "unassigned"}/${projectId}/${objectName}`, capturedAt: Date.now(), ...(type === "fingerprint" ? { fingerType: reference, nfiqScore: 1 } : {}) };
   }
 
   const value = useMemo(() => ({ ready, state, error, activate, signOut, pull, push, queueSubmission, createSimulatedAttachment }), [ready, state, error]);
