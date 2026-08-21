@@ -264,8 +264,8 @@ importers:
         specifier: ^0.25.0
         version: 0.25.12
       pnpm:
-        specifier: ^10.15.1
-        version: 10.34.5
+        specifier: ^11.22.0
+        version: 11.22.0
       postcss:
         specifier: '>=8.5.18'
         version: 8.5.26
@@ -605,8 +605,8 @@ importers:
         specifier: ^0.25.0
         version: 0.25.12
       pnpm:
-        specifier: ^10.15.1
-        version: 10.34.5
+        specifier: ^11.22.0
+        version: 11.22.0
       postcss:
         specifier: '>=8.5.18'
         version: 8.5.26
@@ -5552,9 +5552,9 @@ packages:
     resolution: {integrity: sha512-NCrCHhWmnQklfH4MtJMRjZ2a8c80qXeMlQMv2uVp9ISJMTt562SbGd6n2oq0PaPgKm7Z6pL9E2UlLIhC+SHL3w==}
     engines: {node: '>=4.0.0'}
 
-  pnpm@10.34.5:
-    resolution: {integrity: sha512-pO4F8vc2WCVb1qiYWcBlpFwopX2u+uLIk6Fo7itzFow3uR6D5X6mdlStA/AwMXRkMOi84442LgQmBfuKvIAZLg==}
-    engines: {node: '>=18.12'}
+  pnpm@11.22.0:
+    resolution: {integrity: sha512-H/hwxMYTPf2I+yr8Rt0T1H8JyXlLQ4xv20fKmMrzvBY4HuC+k6CRuOOCTPAfiJ9G19niCRD7C+GrD7W6qA3WIQ==}
+    engines: {node: '>=22.13'}
     hasBin: true
 
   points-on-curve@0.2.0:
@@ -12664,7 +12664,7 @@ snapshots:
 
   pngjs@3.4.0: {}
 
-  pnpm@10.34.5: {}
+  pnpm@11.22.0: {}
 
   points-on-curve@0.2.0: {}
 
