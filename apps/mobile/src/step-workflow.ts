@@ -1,10 +1,11 @@
 import type { BioCollectFormStep } from "@biocollect/form-engine";
 import type { FormField } from "./domain";
+import { isHierarchyComplete } from "./hierarchy";
 
 export function isStepValid(input: { step: BioCollectFormStep; fields: FormField[]; answers: Record<string, string>; requiredFingers: string[]; capturedFingers: Set<string> }) {
   if (input.step.kind === "biometrics") return input.requiredFingers.every(finger => input.capturedFingers.has(finger));
   const byId = new Map(input.fields.map(field => [field.id, field]));
-  return input.step.fieldIds.every(fieldId => { const field = byId.get(fieldId); return !field?.required || Boolean(input.answers[fieldId]); });
+  return input.step.fieldIds.every(fieldId => { const field = byId.get(fieldId); if (!field?.required) return true; if (field.type === "hierarchical selection") return Boolean(field.hierarchicalDefinition && isHierarchyComplete(field.hierarchicalDefinition, input.answers[fieldId])); return Boolean(input.answers[fieldId]); });
 }
 
 export function adjacentStep(steps: BioCollectFormStep[], currentStepId: string, direction: -1 | 1) {

@@ -23,7 +23,7 @@ import { startLogin } from "@/const";
 import { useI18n } from "@/contexts/I18nContext";
 import type { TranslationKey } from "@biocollect/i18n";
 import { useIsMobile } from "@/hooks/useMobile";
-import { Building2, Crown, Database, FilePenLine, FolderKanban, GitCompareArrows, LayoutDashboard, LogOut, PanelLeft } from "lucide-react";
+import { Building2, Crown, Database, FilePenLine, FolderKanban, GitBranch, GitCompareArrows, LayoutDashboard, LogOut, PanelLeft } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { DashboardLayoutSkeleton } from './DashboardLayoutSkeleton';
@@ -35,6 +35,7 @@ const menuItems = (t: (key: TranslationKey) => string) => [
   { icon: FolderKanban, label: t("navigation.projects"), path: "/projects", roles: ["Superadmin", "Administrateur", "Superviseur", "Enquêteur"] },
   { icon: FilePenLine, label: t("navigation.forms"), path: "/forms", roles: ["Superadmin", "Administrateur", "Superviseur", "Enquêteur"] },
   { icon: Database, label: t("navigation.referenceData"), path: "/reference-data", roles: ["Superadmin", "Administrateur", "Superviseur"] },
+  { icon: GitBranch, label: t("navigation.selectionTypes"), path: "/selection-types", roles: ["Superadmin", "Administrateur", "Superviseur"] },
   { icon: GitCompareArrows, label: t("navigation.conflicts"), path: "/conflicts", roles: ["Superadmin", "Administrateur", "Superviseur", "Enquêteur"] },
   { icon: Building2, label: t("navigation.spaces"), path: "/spaces", roles: ["Superadmin", "Administrateur", "Superviseur", "Enquêteur"] },
   { icon: Crown, label: t("navigation.superadmin"), path: "/superadmin", roles: ["Superadmin"] },

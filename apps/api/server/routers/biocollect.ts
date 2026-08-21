@@ -3,20 +3,25 @@ import { z } from "zod";
 import { createSyncedSubmission, resolveConflict } from "../db";
 import { isValidMinioPath } from "../biocollect/mockScaleBiometrics";
 import { runMockDeduplication } from "../biocollect/submissionPipeline";
-import { assertTenantProject, createTenant, createTenantForm, createTenantProject, createTenantReferenceDataSet, deleteTenantReferenceDataSet, getTenantDashboard, getTenantProjectConfiguration, getTenantReferenceDataSet, getTenantSyncBundle, listAllTenants, listTenantConflictCases, listTenantForms, listTenantProjects, listTenantReferenceDataSets, listUserTenants, requireTenantRole, selectActiveTenant, tenantOwnsSubmission, updateTenantBySuperadmin, updateTenantProjectConfiguration, updateTenantReferenceDataSet } from "../tenantDb";
+import { assertTenantProject, createTenant, createTenantForm, createTenantProject, createTenantReferenceDataSet, createTenantSelectionType, deleteTenantReferenceDataSet, deleteTenantSelectionType, getTenantDashboard, getTenantProjectConfiguration, getTenantReferenceDataSet, getTenantSelectionType, getTenantSyncBundle, listAllTenants, listTenantConflictCases, listTenantForms, listTenantProjects, listTenantReferenceDataSetUsage, listTenantReferenceDataSetVersions, listTenantReferenceDataSets, listTenantSelectionTypes, listUserTenants, requireTenantRole, selectActiveTenant, tenantOwnsSubmission, updateTenantBySuperadmin, updateTenantProjectConfiguration, updateTenantReferenceDataSet, updateTenantSelectionType } from "../tenantDb";
 import { CONFLICT_ACTIONS, FORM_FIELD_TYPES, FORM_STEP_KINDS, TENANT_ROLES, type FormField, type SelectionOption } from "../../shared/biocollect";
 import { validateFormSteps } from "@biocollect/form-engine";
 import { protectedProcedure, router, superadminProcedure } from "../_core/trpc";
 import { normalizeSelectionOptions, parseReferenceDataFile } from "../reference-data";
 import { storagePut } from "../storage";
+import { isValidSelectionType } from "../selection-type-validation";
 
 const tenantIdSchema = z.object({ tenantId: z.string().min(1) });
 const projectIdSchema = z.object({ tenantId: z.string().min(1), projectId: z.string().min(1) });
 const selectionOptionSchema = z.object({ value: z.string().min(1).max(120), label: z.string().min(1).max(160) });
+const selectionTypeLevelSchema = z.object({ id: z.string().min(1).max(96), label: z.string().min(1).max(80), order: z.number().int().min(0).max(15) });
+const selectionTypeNodeSchema = z.object({ id: z.string().min(1).max(36), levelId: z.string().min(1).max(96), value: z.string().min(1).max(120), label: z.string().min(1).max(160), parentNodeId: z.string().min(1).max(36).nullable().optional() });
 const formFieldSchema = z.object({
   id: z.string().min(1), label: z.string().min(1).max(160), type: z.enum(FORM_FIELD_TYPES), required: z.boolean(),
   options: z.array(z.union([z.string().min(1).max(160), selectionOptionSchema])).max(10_000).optional(),
   referenceDataSetId: z.string().min(1).max(120).optional(),
+  referenceDataSetVersion: z.number().int().min(1).optional(),
+  selectionTypeId: z.string().min(1).max(120).optional(),
   condition: z.object({ fieldId: z.string().min(1), operator: z.enum(["equals", "notEquals", "isFilled"]), value: z.string().optional() }).optional(),
 });
 const formStepSchema = z.object({
@@ -34,13 +39,15 @@ async function requireTenant(ctx: { user: { id: number; role: any } | null }, te
 async function materializeFormFields(tenantId: string, fields: FormField[]) {
   return Promise.all(fields.map(async field => {
     if (field.referenceDataSetId && field.type !== "multiple choice") throw new TRPCError({ code: "BAD_REQUEST", message: "Seuls les champs de sélection peuvent utiliser un référentiel." });
+    if (field.selectionTypeId && field.type !== "hierarchical selection") throw new TRPCError({ code: "BAD_REQUEST", message: "Seul un champ hiérarchique peut utiliser ce type personnalisé." });
+    if (field.type === "hierarchical selection") { if (!field.selectionTypeId) throw new TRPCError({ code: "BAD_REQUEST", message: "Un type de sélection hiérarchique est obligatoire." }); const type = await getTenantSelectionType(tenantId, field.selectionTypeId); if (!type?.nodes?.length) throw new TRPCError({ code: "BAD_REQUEST", message: "Le type hiérarchique est introuvable ou ne contient aucun nœud." }); return { ...field, hierarchicalDefinition: { selectionTypeId: type.id, key: type.key, name: type.name, levels: type.levels, nodes: type.nodes } }; }
     if (field.type !== "multiple choice") return field;
     if (field.referenceDataSetId) {
       const referenceData = await getTenantReferenceDataSet(tenantId, field.referenceDataSetId);
       if (!referenceData) throw new TRPCError({ code: "BAD_REQUEST", message: "Le référentiel sélectionné est introuvable dans cet espace." });
       const options = normalizeSelectionOptions(referenceData.options as Array<string | SelectionOption>);
       if (!options.length) throw new TRPCError({ code: "BAD_REQUEST", message: "Le référentiel sélectionné ne contient aucune option." });
-      return { ...field, options };
+      return { ...field, options, referenceDataSetVersion: referenceData.currentVersion };
     }
     const options = normalizeSelectionOptions(field.options);
     if (!options.length) throw new TRPCError({ code: "BAD_REQUEST", message: "Chaque champ de sélection doit contenir au moins une option." });
@@ -69,6 +76,8 @@ export const biocollectRouter = router({
   }),
   referenceData: router({
     list: protectedProcedure.input(tenantIdSchema).query(async ({ ctx, input }) => { await requireTenant(ctx, input.tenantId, ["Administrateur", "Superviseur"]); return listTenantReferenceDataSets(input.tenantId); }),
+    history: protectedProcedure.input(z.object({ tenantId: z.string().min(1), referenceDataSetId: z.string().min(1) })).query(async ({ ctx, input }) => { await requireTenant(ctx, input.tenantId, ["Administrateur", "Superviseur"]); return listTenantReferenceDataSetVersions(input.tenantId, input.referenceDataSetId); }),
+    usage: protectedProcedure.input(z.object({ tenantId: z.string().min(1), referenceDataSetId: z.string().min(1) })).query(async ({ ctx, input }) => { await requireTenant(ctx, input.tenantId, ["Administrateur", "Superviseur"]); return listTenantReferenceDataSetUsage(input.tenantId, input.referenceDataSetId); }),
     create: protectedProcedure.input(z.object({ tenantId: z.string().min(1), type: z.string().regex(/^[a-z][a-z0-9_-]*$/).max(96), name: z.string().min(3).max(160), options: z.array(selectionOptionSchema).min(1).max(10_000) })).mutation(async ({ ctx, input }) => {
       await requireTenant(ctx, input.tenantId, ["Administrateur"]);
       const options = normalizeSelectionOptions(input.options);
@@ -79,7 +88,7 @@ export const biocollectRouter = router({
       await requireTenant(ctx, input.tenantId, ["Administrateur"]);
       const options = normalizeSelectionOptions(input.options);
       if (new Set(options.map(option => option.value)).size !== options.length) throw new TRPCError({ code: "BAD_REQUEST", message: "Les valeurs d’un référentiel doivent être uniques." });
-      const updated = await updateTenantReferenceDataSet({ ...input, options });
+      const updated = await updateTenantReferenceDataSet({ ...input, options, updatedBy: ctx.user!.id });
       if (!updated) throw new TRPCError({ code: "NOT_FOUND", message: "Référentiel introuvable dans cet espace." });
       return updated;
     }),
@@ -101,12 +110,19 @@ export const biocollectRouter = router({
       const parsed = parseReferenceDataFile({ fileName: input.fileName, buffer });
       const source = await storagePut(`reference-data/${input.tenantId}/${input.type}/${safeSourceFileName(input.fileName)}`, buffer, input.mimeType || "application/octet-stream");
       if (input.referenceDataSetId) {
-        const updated = await updateTenantReferenceDataSet({ tenantId: input.tenantId, referenceDataSetId: input.referenceDataSetId, type: input.type, name: input.name, options: parsed.options, sourceFileName: input.fileName, sourceFileKey: source.key, sourceFileMime: input.mimeType });
+        const updated = await updateTenantReferenceDataSet({ tenantId: input.tenantId, referenceDataSetId: input.referenceDataSetId, type: input.type, name: input.name, options: parsed.options, updatedBy: ctx.user!.id, sourceFileName: input.fileName, sourceFileKey: source.key, sourceFileMime: input.mimeType });
         if (!updated) throw new TRPCError({ code: "NOT_FOUND", message: "Référentiel introuvable dans cet espace." });
         return updated;
       }
       return createTenantReferenceDataSet({ tenantId: input.tenantId, type: input.type, name: input.name, options: parsed.options, createdBy: ctx.user!.id, sourceFileName: input.fileName, sourceFileKey: source.key, sourceFileMime: input.mimeType });
     }),
+  }),
+  selectionTypes: router({
+    list: protectedProcedure.input(tenantIdSchema).query(async ({ ctx, input }) => { await requireTenant(ctx, input.tenantId, ["Administrateur", "Superviseur"]); return listTenantSelectionTypes(input.tenantId); }),
+    get: protectedProcedure.input(z.object({ tenantId: z.string().min(1), selectionTypeId: z.string().min(1) })).query(async ({ ctx, input }) => { await requireTenant(ctx, input.tenantId, ["Administrateur", "Superviseur"]); return getTenantSelectionType(input.tenantId, input.selectionTypeId); }),
+    create: protectedProcedure.input(z.object({ tenantId: z.string().min(1), key: z.string().regex(/^[a-z][a-z0-9_-]*$/).max(96), name: z.string().min(3).max(160), levels: z.array(selectionTypeLevelSchema).min(2).max(16), nodes: z.array(selectionTypeNodeSchema).min(1).max(20_000) })).mutation(async ({ ctx, input }) => { await requireTenant(ctx, input.tenantId, ["Administrateur"]); if (!isValidSelectionType(input.levels, input.nodes)) throw new TRPCError({ code: "BAD_REQUEST", message: "La structure hiérarchique est invalide." }); return createTenantSelectionType({ ...input, createdBy: ctx.user!.id }); }),
+    update: protectedProcedure.input(z.object({ tenantId: z.string().min(1), selectionTypeId: z.string().min(1), key: z.string().regex(/^[a-z][a-z0-9_-]*$/).max(96), name: z.string().min(3).max(160), levels: z.array(selectionTypeLevelSchema).min(2).max(16), nodes: z.array(selectionTypeNodeSchema).min(1).max(20_000) })).mutation(async ({ ctx, input }) => { await requireTenant(ctx, input.tenantId, ["Administrateur"]); if (!isValidSelectionType(input.levels, input.nodes)) throw new TRPCError({ code: "BAD_REQUEST", message: "La structure hiérarchique est invalide." }); const updated = await updateTenantSelectionType({ ...input, createdBy: ctx.user!.id }); if (!updated) throw new TRPCError({ code: "NOT_FOUND" }); return updated; }),
+    delete: protectedProcedure.input(z.object({ tenantId: z.string().min(1), selectionTypeId: z.string().min(1) })).mutation(async ({ ctx, input }) => { await requireTenant(ctx, input.tenantId, ["Administrateur"]); if (!await deleteTenantSelectionType(input.tenantId, input.selectionTypeId)) throw new TRPCError({ code: "NOT_FOUND" }); return { success: true }; }),
   }),
   forms: router({
     list: protectedProcedure.input(projectIdSchema).query(async ({ ctx, input }) => { await requireTenant(ctx, input.tenantId, ["Administrateur", "Superviseur"]); return listTenantForms(input.tenantId, input.projectId); }),

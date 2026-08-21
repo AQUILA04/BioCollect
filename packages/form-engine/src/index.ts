@@ -9,13 +9,19 @@ export type BioCollectSelectionOption = {
   label: string;
 };
 
+export type BioCollectSelectionTypeLevel = { id: string; label: string; order: number };
+export type BioCollectSelectionTypeNode = { id: string; levelId: string; value: string; label: string; parentNodeId?: string | null };
+export type BioCollectHierarchicalSelectionDefinition = { selectionTypeId: string; key: string; name: string; levels: BioCollectSelectionTypeLevel[]; nodes: BioCollectSelectionTypeNode[] };
+
 export type BioCollectFormField = {
   id: string;
   label: string;
-  type: "text" | "date" | "multiple choice" | "photo";
+  type: "text" | "date" | "multiple choice" | "hierarchical selection" | "photo";
   required: boolean;
   options?: Array<string | BioCollectSelectionOption>;
   referenceDataSetId?: string;
+  selectionTypeId?: string;
+  hierarchicalDefinition?: BioCollectHierarchicalSelectionDefinition;
   condition?: FieldCondition;
 };
 

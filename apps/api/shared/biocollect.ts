@@ -17,7 +17,7 @@ export type SubmissionStatus = (typeof SUBMISSION_STATUSES)[number];
 export const CONFLICT_ACTIONS = ["Rejeter", "Fusionner", "Forcer Faux Positif"] as const;
 export type ConflictAction = (typeof CONFLICT_ACTIONS)[number];
 
-export const FORM_FIELD_TYPES = ["text", "date", "multiple choice", "photo"] as const;
+export const FORM_FIELD_TYPES = ["text", "date", "multiple choice", "hierarchical selection", "photo"] as const;
 export type FormFieldType = (typeof FORM_FIELD_TYPES)[number];
 
 export type SelectionOption = {
@@ -33,11 +33,19 @@ export type ReferenceDataSet = {
   type: string;
   name: string;
   options: SelectionOption[];
+  currentVersion?: number;
   sourceFileName?: string | null;
   sourceFileKey?: string | null;
   createdAt?: Date;
   updatedAt?: Date;
 };
+export type ReferenceDataSetVersion = { id: string; referenceDataSetId: string; tenantId: string; version: number; type: string; name: string; options: SelectionOption[]; sourceFileName?: string | null; sourceRowCount: number; createdBy: number; createdAt?: Date };
+
+export type SelectionTypeLevel = { id: string; label: string; order: number };
+export type SelectionTypeNode = { id: string; levelId: string; value: string; label: string; parentNodeId?: string | null };
+export type HierarchicalSelectionDefinition = { selectionTypeId: string; key: string; name: string; levels: SelectionTypeLevel[]; nodes: SelectionTypeNode[] };
+export type HierarchicalSelectionAnswer = { selectionTypeId: string; selections: Record<string, string>; leafNodeId: string };
+export type SelectionType = { id: string; tenantId: string; key: string; name: string; levels: SelectionTypeLevel[]; nodes?: SelectionTypeNode[]; createdAt?: Date; updatedAt?: Date };
 
 export type FormField = {
   id: string;
@@ -47,6 +55,9 @@ export type FormField = {
   /** Legacy string arrays remain valid and are normalized at persistence or display time. */
   options?: LegacyOrSelectionOption[];
   referenceDataSetId?: string;
+  referenceDataSetVersion?: number;
+  selectionTypeId?: string;
+  hierarchicalDefinition?: HierarchicalSelectionDefinition;
   condition?: {
     fieldId: string;
     operator: "equals" | "notEquals" | "isFilled";

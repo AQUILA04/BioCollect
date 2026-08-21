@@ -43,6 +43,20 @@
       "when": 1787320701300,
       "tag": "0005_lonely_maximus",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "5",
+      "when": 1787325779291,
+      "tag": "0006_familiar_power_man",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "5",
+      "when": 1787328243324,
+      "tag": "0007_petite_quicksilver",
+      "breakpoints": true
     }
   ]
 }

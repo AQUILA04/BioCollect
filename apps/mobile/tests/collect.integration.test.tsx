@@ -29,7 +29,7 @@ vi.mock("../src/mobile-context", () => ({ useMobile: () => mobile.value }));
 vi.mock("../src/i18n-context", () => ({
   useI18n: () => ({
     t: (key: string, values: Record<string, string | number> = {}) => ({
-      "common.back": "Back", "common.requiredInformation": "Required", "mobile.formUnavailable": "Unavailable", "mobile.formUnavailableDescription": "Unavailable description", "mobile.record": "Record", "mobile.attachedCapture": "Attached", "mobile.addCapture": "Add capture", "mobile.simulatedCaptureDescription": "Capture", "mobile.datePlaceholder": "Date", "mobile.responsePlaceholder": "Response", "mobile.recordSaved": "Saved", "mobile.recordSavedDescription": "Saved description", "mobile.viewQueue": "Queue", "steps.progress": `Step ${values.current} of ${values.total}`, "steps.completeStep": "Complete this step", "steps.draftSaved": "Draft saved", "steps.previous": "Previous", "steps.next": "Next", "steps.finalize": "Save record", "steps.title": "Steps", "steps.biometrics": "Biometrics", "steps.biometricDescription": "Biometrics", "mobile.capture": `Capture ${values.finger}`, "mobile.captureReady": `Ready ${values.finger}`, "mobile.captureDescription": "Capture",
+      "common.back": "Back", "common.requiredInformation": "Required", "mobile.formUnavailable": "Unavailable", "mobile.formUnavailableDescription": "Unavailable description", "mobile.record": "Record", "mobile.attachedCapture": "Attached", "mobile.addCapture": "Add capture", "mobile.simulatedCaptureDescription": "Capture", "mobile.datePlaceholder": "Date", "mobile.responsePlaceholder": "Response", "mobile.searchOptions": "Search options", "mobile.searchResults": `${values.count} results`, "mobile.recordSaved": "Saved", "mobile.recordSavedDescription": "Saved description", "mobile.viewQueue": "Queue", "steps.progress": `Step ${values.current} of ${values.total}`, "steps.completeStep": "Complete this step", "steps.draftSaved": "Draft saved", "steps.previous": "Previous", "steps.next": "Next", "steps.finalize": "Save record", "steps.title": "Steps", "steps.biometrics": "Biometrics", "steps.biometricDescription": "Biometrics", "mobile.capture": `Capture ${values.finger}`, "mobile.captureReady": `Ready ${values.finger}`, "mobile.captureDescription": "Capture",
     } as Record<string, string>)[key] ?? key,
   }),
 }));
@@ -96,5 +96,36 @@ describe("écran de collecte multi-étapes", () => {
     const yes = renderer.root.findAllByType(PressableHost).find(item => item.props.accessibilityRole === "radio" && item.props.children?.props?.children === "Oui");
     await act(async () => { yes?.props.onPress(); });
     expect(mobile.saveDraft).toHaveBeenCalledWith(expect.objectContaining({ currentStepId: "selection", data: { status: "true" } }));
+  });
+
+  it("enchaîne les niveaux hiérarchiques, réinitialise les descendants et soumet la relation complète", async () => {
+    setup();
+    mobile.value.state.projects[0].forms = [{ id: "form-1", name: "Geolocation", fields: [{ id: "geo", label: "Localité", type: "hierarchical selection", required: true, selectionTypeId: "geo", hierarchicalDefinition: { selectionTypeId: "geo", key: "geolocation", name: "Geolocation", levels: [{ id: "region", label: "Region", order: 0 }, { id: "prefecture", label: "Prefecture", order: 1 }], nodes: [{ id: "r-maritime", levelId: "region", value: "MAR", label: "Maritime" }, { id: "r-plateaux", levelId: "region", value: "PLA", label: "Plateaux" }, { id: "p-golfe", levelId: "prefecture", value: "GOL", label: "Golfe", parentNodeId: "r-maritime" }, { id: "p-ogat", levelId: "prefecture", value: "OGA", label: "Ogou", parentNodeId: "r-plateaux" }] } }], steps: [{ id: "geo-step", label: "Geography", order: 0, kind: "fields", fieldIds: ["geo"] }] }];
+    let renderer!: TestRenderer.ReactTestRenderer;
+    await act(async () => { renderer = TestRenderer.create(<CollectScreen />); });
+    const radio = (label: string) => renderer.root.findAllByType(PressableHost).find(item => item.props.accessibilityRole === "radio" && item.props.children?.props?.children === label);
+    expect(button(renderer.root, "Save record")?.props.disabled).toBe(true);
+    await act(async () => { radio("Maritime")?.props.onPress(); });
+    await act(async () => { radio("Golfe")?.props.onPress(); });
+    const completeDraft = mobile.saveDraft.mock.calls.at(-1)?.[0].data.geo;
+    expect(JSON.parse(completeDraft).selections).toEqual({ region: "r-maritime", prefecture: "p-golfe" });
+    await act(async () => { radio("Plateaux")?.props.onPress(); });
+    const resetDraft = mobile.saveDraft.mock.calls.at(-1)?.[0].data.geo;
+    expect(JSON.parse(resetDraft).selections).toEqual({ region: "r-plateaux" });
+    expect(button(renderer.root, "Save record")?.props.disabled).toBe(true);
+    await act(async () => { radio("Ogou")?.props.onPress(); });
+    await act(async () => { await button(renderer.root, "Save record")?.props.onPress(); });
+    const submitted = mobile.finalizeSubmission.mock.calls.at(-1)?.[0].data.geo;
+    expect(JSON.parse(submitted).selections).toEqual({ region: "r-plateaux", prefecture: "p-ogat" });
+  });
+
+  it("affiche une recherche pour une grande liste, filtre les résultats et indique l’absence de résultat", async () => {
+    setup(); mobile.value.state.projects[0].forms = [{ id: "form-1", name: "Large list", fields: [{ id: "village", label: "Village", type: "multiple choice", required: true, options: Array.from({ length: 20 }, (_, index) => ({ value: `v${index}`, label: `Village ${index}` })) }], steps: [{ id: "list-step", label: "List", order: 0, kind: "fields", fieldIds: ["village"] }] }];
+    let renderer!: TestRenderer.ReactTestRenderer; await act(async () => { renderer = TestRenderer.create(<CollectScreen />); }); const search = renderer.root.findByProps({ accessibilityLabel: "Search options" }); expect(search).toBeDefined(); await act(async () => { search.props.onChangeText("Village 10"); }); const matching = renderer.root.findAllByType(PressableHost).filter(item => item.props.accessibilityRole === "radio"); expect(matching).toHaveLength(1); expect(matching[0].props.children?.props?.children).toBe("Village 10"); await act(async () => { search.props.onChangeText("Inconnu"); }); expect(renderer.root.findAllByType(PressableHost).filter(item => item.props.accessibilityRole === "radio")).toHaveLength(0); expect(JSON.stringify(renderer.toJSON())).toContain("0 results");
+  });
+
+  it("efface la recherche enfant lorsqu’un parent hiérarchique est remplacé", async () => {
+    setup(); const regions = [{ id: "r-maritime", levelId: "region", value: "MAR", label: "Maritime" }, { id: "r-plateaux", levelId: "region", value: "PLA", label: "Plateaux" }, ...Array.from({ length: 11 }, (_, index) => ({ id: `r-${index}`, levelId: "region", value: `R${index}`, label: `Autre ${index}` }))]; const maritimePrefectures = Array.from({ length: 13 }, (_, index) => ({ id: `m-${index}`, levelId: "prefecture", value: `M${index}`, label: `Golfe ${index}`, parentNodeId: "r-maritime" })); const plateauPrefectures = Array.from({ length: 13 }, (_, index) => ({ id: `p-${index}`, levelId: "prefecture", value: `P${index}`, label: `Plateau ${index}`, parentNodeId: "r-plateaux" })); mobile.value.state.projects[0].forms = [{ id: "form-1", name: "Search geography", fields: [{ id: "geo", label: "Localité", type: "hierarchical selection", required: true, selectionTypeId: "geo", hierarchicalDefinition: { selectionTypeId: "geo", key: "geo", name: "Geo", levels: [{ id: "region", label: "Region", order: 0 }, { id: "prefecture", label: "Prefecture", order: 1 }], nodes: [...regions, ...maritimePrefectures, ...plateauPrefectures] } }], steps: [{ id: "geo-step", label: "Geography", order: 0, kind: "fields", fieldIds: ["geo"] }] }];
+    let renderer!: TestRenderer.ReactTestRenderer; await act(async () => { renderer = TestRenderer.create(<CollectScreen />); }); const radio = (label: string) => renderer.root.findAllByType(PressableHost).find(item => item.props.accessibilityRole === "radio" && item.props.children?.props?.children === label); const regionSearch = () => renderer.root.findByProps({ accessibilityLabel: "Search options Region" }); await act(async () => { regionSearch().props.onChangeText("Maritime"); }); await act(async () => { radio("Maritime")?.props.onPress(); }); const prefectureSearch = () => renderer.root.findByProps({ accessibilityLabel: "Search options Prefecture" }); await act(async () => { prefectureSearch().props.onChangeText("Golfe 12"); regionSearch().props.onChangeText("Plateaux"); }); await act(async () => { radio("Plateaux")?.props.onPress(); }); expect(prefectureSearch().props.value).toBe("");
   });
 });

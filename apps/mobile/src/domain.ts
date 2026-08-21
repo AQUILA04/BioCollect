@@ -1,7 +1,8 @@
 import type { BioCollectFormStep, BioCollectSelectionOption } from "@biocollect/form-engine";
+import type { BioCollectHierarchicalSelectionDefinition } from "@biocollect/form-engine";
 
 export type BiometricStatus = "DRAFT" | "SYNCED" | "PROCESSING" | "VALIDATED" | "SUSPECTED_DUPLICATE" | "REJECTED";
-export type FieldType = "text" | "date" | "multiple choice" | "photo";
+export type FieldType = "text" | "date" | "multiple choice" | "hierarchical selection" | "photo";
 
 export type FormField = {
   id: string;
@@ -10,6 +11,8 @@ export type FormField = {
   required: boolean;
   options?: Array<string | BioCollectSelectionOption>;
   referenceDataSetId?: string;
+  selectionTypeId?: string;
+  hierarchicalDefinition?: BioCollectHierarchicalSelectionDefinition;
 };
 
 export type FormDefinition = {

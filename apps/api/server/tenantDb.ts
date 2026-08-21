@@ -1,7 +1,7 @@
 import { and, desc, eq } from "drizzle-orm";
 import { nanoid } from "nanoid";
-import { biometricAttachments, biometricConfigs, formSchemas, projects, referenceDataSets, submissions, tenantMemberships, tenants, users } from "../drizzle/schema";
-import type { BiometricAttachmentInput, FormField, FormStep, SelectionOption, TenantRole, UserRole } from "../shared/biocollect";
+import { biometricAttachments, biometricConfigs, formSchemas, projects, referenceDataSets, referenceDataSetVersions, selectionTypeNodes, selectionTypes, submissions, tenantMemberships, tenants, users } from "../drizzle/schema";
+import type { BiometricAttachmentInput, FormField, FormStep, SelectionOption, SelectionTypeLevel, SelectionTypeNode, TenantRole, UserRole } from "../shared/biocollect";
 import { getDb } from "./db";
 
 async function requireDb() {
@@ -83,17 +83,20 @@ export async function getTenantReferenceDataSet(tenantId: string, referenceDataS
 export async function createTenantReferenceDataSet(input: { tenantId: string; type: string; name: string; options: SelectionOption[]; createdBy: number; sourceFileName?: string; sourceFileKey?: string; sourceFileMime?: string }) {
   const db = await requireDb();
   const id = nanoid(20);
-  await db.insert(referenceDataSets).values({ id, tenantId: input.tenantId, type: input.type, name: input.name, options: input.options, createdBy: input.createdBy, sourceFileName: input.sourceFileName ?? null, sourceFileKey: input.sourceFileKey ?? null, sourceFileMime: input.sourceFileMime ?? null, sourceRowCount: input.options.length });
+  await db.transaction(async tx => { const snapshot = { tenantId: input.tenantId, type: input.type, name: input.name, options: input.options, createdBy: input.createdBy, sourceFileName: input.sourceFileName ?? null, sourceFileKey: input.sourceFileKey ?? null, sourceFileMime: input.sourceFileMime ?? null, sourceRowCount: input.options.length }; await tx.insert(referenceDataSets).values({ id, ...snapshot, currentVersion: 1 }); await tx.insert(referenceDataSetVersions).values({ id: nanoid(20), referenceDataSetId: id, version: 1, ...snapshot }); });
   return getTenantReferenceDataSet(input.tenantId, id);
 }
 
-export async function updateTenantReferenceDataSet(input: { tenantId: string; referenceDataSetId: string; type: string; name: string; options: SelectionOption[]; sourceFileName?: string | null; sourceFileKey?: string | null; sourceFileMime?: string | null }) {
+export async function updateTenantReferenceDataSet(input: { tenantId: string; referenceDataSetId: string; type: string; name: string; options: SelectionOption[]; updatedBy: number; sourceFileName?: string | null; sourceFileKey?: string | null; sourceFileMime?: string | null }) {
   const db = await requireDb();
   const existing = await getTenantReferenceDataSet(input.tenantId, input.referenceDataSetId);
   if (!existing) return null;
-  await db.update(referenceDataSets).set({ type: input.type, name: input.name, options: input.options, sourceFileName: input.sourceFileName ?? existing.sourceFileName, sourceFileKey: input.sourceFileKey ?? existing.sourceFileKey, sourceFileMime: input.sourceFileMime ?? existing.sourceFileMime, sourceRowCount: input.options.length }).where(eq(referenceDataSets.id, input.referenceDataSetId));
+  const version = existing.currentVersion + 1; const snapshot = { tenantId: input.tenantId, type: input.type, name: input.name, options: input.options, createdBy: input.updatedBy, sourceFileName: input.sourceFileName ?? existing.sourceFileName, sourceFileKey: input.sourceFileKey ?? existing.sourceFileKey, sourceFileMime: input.sourceFileMime ?? existing.sourceFileMime, sourceRowCount: input.options.length }; await db.transaction(async tx => { await tx.update(referenceDataSets).set({ ...snapshot, currentVersion: version }).where(eq(referenceDataSets.id, input.referenceDataSetId)); await tx.insert(referenceDataSetVersions).values({ id: nanoid(20), referenceDataSetId: input.referenceDataSetId, version, ...snapshot }); });
   return getTenantReferenceDataSet(input.tenantId, input.referenceDataSetId);
 }
+
+export async function listTenantReferenceDataSetVersions(tenantId: string, referenceDataSetId: string) { const db = await requireDb(); return db.select().from(referenceDataSetVersions).where(and(eq(referenceDataSetVersions.tenantId, tenantId), eq(referenceDataSetVersions.referenceDataSetId, referenceDataSetId))).orderBy(desc(referenceDataSetVersions.version)); }
+export async function listTenantReferenceDataSetUsage(tenantId: string, referenceDataSetId: string) { const db = await requireDb(); const forms = await db.select({ formId: formSchemas.id, formName: formSchemas.name, formVersion: formSchemas.version, fields: formSchemas.fields, projectId: projects.id, projectName: projects.name, createdAt: formSchemas.createdAt }).from(formSchemas).innerJoin(projects, eq(formSchemas.projectId, projects.id)).where(eq(projects.tenantId, tenantId)).orderBy(desc(formSchemas.createdAt)); return forms.flatMap(form => (form.fields as FormField[]).filter(field => field.referenceDataSetId === referenceDataSetId).map(field => ({ formId: form.formId, formName: form.formName, formVersion: form.formVersion, projectId: form.projectId, projectName: form.projectName, fieldId: field.id, fieldLabel: field.label, referenceDataSetVersion: field.referenceDataSetVersion ?? null, createdAt: form.createdAt }))); }
 
 export async function deleteTenantReferenceDataSet(tenantId: string, referenceDataSetId: string) {
   const db = await requireDb();
@@ -102,6 +105,14 @@ export async function deleteTenantReferenceDataSet(tenantId: string, referenceDa
   await db.delete(referenceDataSets).where(eq(referenceDataSets.id, referenceDataSetId));
   return true;
 }
+
+type SelectionTypeInput = { tenantId: string; key: string; name: string; levels: SelectionTypeLevel[]; nodes: SelectionTypeNode[]; createdBy: number };
+function formatSelectionType(type: typeof selectionTypes.$inferSelect, nodes: Array<typeof selectionTypeNodes.$inferSelect>) { return { ...type, levels: type.levels as SelectionTypeLevel[], nodes: nodes.map(node => ({ id: node.id, levelId: node.levelId, value: node.value, label: node.label, parentNodeId: node.parentNodeId })) }; }
+export async function getTenantSelectionType(tenantId: string, selectionTypeId: string) { const db = await requireDb(); const type = (await db.select().from(selectionTypes).where(and(eq(selectionTypes.id, selectionTypeId), eq(selectionTypes.tenantId, tenantId))).limit(1))[0]; if (!type) return null; const nodes = await db.select().from(selectionTypeNodes).where(eq(selectionTypeNodes.selectionTypeId, selectionTypeId)).orderBy(selectionTypeNodes.levelId, selectionTypeNodes.label); return formatSelectionType(type, nodes); }
+export async function listTenantSelectionTypes(tenantId: string) { const db = await requireDb(); const types = await db.select().from(selectionTypes).where(eq(selectionTypes.tenantId, tenantId)).orderBy(desc(selectionTypes.updatedAt)); return Promise.all(types.map(type => getTenantSelectionType(tenantId, type.id))); }
+export async function createTenantSelectionType(input: SelectionTypeInput) { const db = await requireDb(); const id = nanoid(20); await db.transaction(async tx => { await tx.insert(selectionTypes).values({ id, tenantId: input.tenantId, key: input.key, name: input.name, levels: input.levels, createdBy: input.createdBy }); if (input.nodes.length) await tx.insert(selectionTypeNodes).values(input.nodes.map(node => ({ id: node.id || nanoid(20), selectionTypeId: id, levelId: node.levelId, value: node.value, label: node.label, parentNodeId: node.parentNodeId ?? null }))); }); return getTenantSelectionType(input.tenantId, id); }
+export async function updateTenantSelectionType(input: SelectionTypeInput & { selectionTypeId: string }) { const existing = await getTenantSelectionType(input.tenantId, input.selectionTypeId); if (!existing) return null; const db = await requireDb(); await db.transaction(async tx => { await tx.update(selectionTypes).set({ key: input.key, name: input.name, levels: input.levels }).where(eq(selectionTypes.id, input.selectionTypeId)); await tx.delete(selectionTypeNodes).where(eq(selectionTypeNodes.selectionTypeId, input.selectionTypeId)); if (input.nodes.length) await tx.insert(selectionTypeNodes).values(input.nodes.map(node => ({ id: node.id || nanoid(20), selectionTypeId: input.selectionTypeId, levelId: node.levelId, value: node.value, label: node.label, parentNodeId: node.parentNodeId ?? null }))); }); return getTenantSelectionType(input.tenantId, input.selectionTypeId); }
+export async function deleteTenantSelectionType(tenantId: string, selectionTypeId: string) { const existing = await getTenantSelectionType(tenantId, selectionTypeId); if (!existing) return false; const db = await requireDb(); await db.transaction(async tx => { await tx.delete(selectionTypeNodes).where(eq(selectionTypeNodes.selectionTypeId, selectionTypeId)); await tx.delete(selectionTypes).where(eq(selectionTypes.id, selectionTypeId)); }); return true; }
 
 export async function createTenantProject(input: { tenantId: string; name: string; description?: string; createdBy: number; requiredFingers: string[]; nfiqThreshold: number; matchingThreshold: number }) {
   const db = await requireDb();
