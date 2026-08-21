@@ -3,8 +3,8 @@ import { z } from "zod";
 import { createSyncedSubmission, resolveConflict } from "../db";
 import { isValidMinioPath } from "../biocollect/mockScaleBiometrics";
 import { runMockDeduplication } from "../biocollect/submissionPipeline";
-import { assertTenantProject, createTenant, createTenantForm, createTenantProject, createTenantReferenceDataSet, createTenantSelectionType, deleteTenantReferenceDataSet, deleteTenantSelectionType, getTenantDashboard, getTenantProjectConfiguration, getTenantReferenceDataSet, getTenantSelectionType, getTenantSyncBundle, listAllTenants, listTenantConflictCases, listTenantForms, listTenantProjects, listTenantReferenceDataSetUsage, listTenantReferenceDataSetVersions, listTenantReferenceDataSets, listTenantSelectionTypes, listUserTenants, requireTenantRole, selectActiveTenant, tenantOwnsSubmission, updateTenantBySuperadmin, updateTenantProjectConfiguration, updateTenantReferenceDataSet, updateTenantSelectionType } from "../tenantDb";
-import { CONFLICT_ACTIONS, FORM_FIELD_TYPES, FORM_STEP_KINDS, TENANT_ROLES, type FormField, type SelectionOption } from "../../shared/biocollect";
+import { assertTenantProject, createTenant, createTenantCampaign, createTenantForm, createTenantProject, createTenantReferenceDataSet, createTenantSelectionType, createTenantTeam, deleteTenantReferenceDataSet, deleteTenantSelectionType, getTenantDashboard, getTenantProjectConfiguration, getTenantReferenceDataSet, getTenantSelectionType, getTenantSyncBundle, listAllTenants, listTenantCampaigns, listTenantConflictCases, listTenantForms, listTenantInvestigators, listTenantProjects, listTenantReferenceDataSetUsage, listTenantReferenceDataSetVersions, listTenantReferenceDataSets, listTenantSelectionTypes, listTenantSyncSessions, listTenantTeams, listUserTenants, requireTenantRole, selectActiveTenant, tenantOwnsSubmission, updateTenantBySuperadmin, updateTenantCampaignStatus, updateTenantProjectConfiguration, updateTenantReferenceDataSet, updateTenantSelectionType } from "../tenantDb";
+import { CAMPAIGN_STATUSES, CONFLICT_ACTIONS, FORM_FIELD_TYPES, FORM_STEP_KINDS, TEAM_MEMBER_ROLES, TENANT_ROLES, type FormField, type SelectionOption } from "../../shared/biocollect";
 import { validateFormSteps } from "@biocollect/form-engine";
 import { protectedProcedure, router, superadminProcedure } from "../_core/trpc";
 import { normalizeSelectionOptions, parseReferenceDataFile } from "../reference-data";
@@ -123,6 +123,32 @@ export const biocollectRouter = router({
     create: protectedProcedure.input(z.object({ tenantId: z.string().min(1), key: z.string().regex(/^[a-z][a-z0-9_-]*$/).max(96), name: z.string().min(3).max(160), levels: z.array(selectionTypeLevelSchema).min(2).max(16), nodes: z.array(selectionTypeNodeSchema).min(1).max(20_000) })).mutation(async ({ ctx, input }) => { await requireTenant(ctx, input.tenantId, ["Administrateur"]); if (!isValidSelectionType(input.levels, input.nodes)) throw new TRPCError({ code: "BAD_REQUEST", message: "La structure hiérarchique est invalide." }); return createTenantSelectionType({ ...input, createdBy: ctx.user!.id }); }),
     update: protectedProcedure.input(z.object({ tenantId: z.string().min(1), selectionTypeId: z.string().min(1), key: z.string().regex(/^[a-z][a-z0-9_-]*$/).max(96), name: z.string().min(3).max(160), levels: z.array(selectionTypeLevelSchema).min(2).max(16), nodes: z.array(selectionTypeNodeSchema).min(1).max(20_000) })).mutation(async ({ ctx, input }) => { await requireTenant(ctx, input.tenantId, ["Administrateur"]); if (!isValidSelectionType(input.levels, input.nodes)) throw new TRPCError({ code: "BAD_REQUEST", message: "La structure hiérarchique est invalide." }); const updated = await updateTenantSelectionType({ ...input, createdBy: ctx.user!.id }); if (!updated) throw new TRPCError({ code: "NOT_FOUND" }); return updated; }),
     delete: protectedProcedure.input(z.object({ tenantId: z.string().min(1), selectionTypeId: z.string().min(1) })).mutation(async ({ ctx, input }) => { await requireTenant(ctx, input.tenantId, ["Administrateur"]); if (!await deleteTenantSelectionType(input.tenantId, input.selectionTypeId)) throw new TRPCError({ code: "NOT_FOUND" }); return { success: true }; }),
+  }),
+  campaigns: router({
+    list: protectedProcedure.input(z.object({ tenantId: z.string().min(1), projectId: z.string().min(1).optional() })).query(async ({ ctx, input }) => { await requireTenant(ctx, input.tenantId, ["Administrateur", "Superviseur"]); return listTenantCampaigns(input.tenantId, input.projectId); }),
+    staff: protectedProcedure.input(tenantIdSchema).query(async ({ ctx, input }) => { await requireTenant(ctx, input.tenantId, ["Administrateur", "Superviseur"]); return listTenantInvestigators(input.tenantId); }),
+    create: protectedProcedure.input(z.object({ tenantId: z.string().min(1), projectId: z.string().min(1), name: z.string().min(3).max(160), description: z.string().max(2_000).optional(), startDate: z.string().min(10).max(40), endDate: z.string().min(10).max(40).optional(), status: z.enum(CAMPAIGN_STATUSES).default("PLANNED") })).mutation(async ({ ctx, input }) => {
+      await requireTenant(ctx, input.tenantId, ["Administrateur", "Superviseur"]);
+      const campaign = await createTenantCampaign({ ...input, startDate: new Date(input.startDate), endDate: input.endDate ? new Date(input.endDate) : undefined, createdBy: ctx.user!.id });
+      if (!campaign) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      return campaign;
+    }),
+    updateStatus: protectedProcedure.input(z.object({ tenantId: z.string().min(1), campaignId: z.string().min(1), status: z.enum(CAMPAIGN_STATUSES), endDate: z.string().min(10).max(40).nullable().optional() })).mutation(async ({ ctx, input }) => {
+      await requireTenant(ctx, input.tenantId, ["Administrateur", "Superviseur"]);
+      const campaign = await updateTenantCampaignStatus({ ...input, endDate: input.endDate === undefined ? undefined : input.endDate ? new Date(input.endDate) : null });
+      if (!campaign) throw new TRPCError({ code: "NOT_FOUND", message: "Campagne introuvable dans cet espace." });
+      return campaign;
+    }),
+  }),
+  teams: router({
+    list: protectedProcedure.input(z.object({ tenantId: z.string().min(1), campaignId: z.string().min(1) })).query(async ({ ctx, input }) => { await requireTenant(ctx, input.tenantId, ["Administrateur", "Superviseur"]); return listTenantTeams(input.tenantId, input.campaignId); }),
+    create: protectedProcedure.input(z.object({ tenantId: z.string().min(1), campaignId: z.string().min(1), name: z.string().min(2).max(160), members: z.array(z.object({ userId: z.number().int().positive(), role: z.enum(TEAM_MEMBER_ROLES) })).min(2).max(3) })).mutation(async ({ ctx, input }) => {
+      await requireTenant(ctx, input.tenantId, ["Administrateur", "Superviseur"]);
+      return createTenantTeam(input);
+    }),
+  }),
+  syncSessions: router({
+    list: protectedProcedure.input(z.object({ tenantId: z.string().min(1), campaignId: z.string().min(1).optional() })).query(async ({ ctx, input }) => { await requireTenant(ctx, input.tenantId, ["Administrateur", "Superviseur"]); return listTenantSyncSessions(input.tenantId, input.campaignId); }),
   }),
   forms: router({
     list: protectedProcedure.input(projectIdSchema).query(async ({ ctx, input }) => { await requireTenant(ctx, input.tenantId, ["Administrateur", "Superviseur"]); return listTenantForms(input.tenantId, input.projectId); }),

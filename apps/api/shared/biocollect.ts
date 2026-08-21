@@ -17,6 +17,15 @@ export type SubmissionStatus = (typeof SUBMISSION_STATUSES)[number];
 export const CONFLICT_ACTIONS = ["Rejeter", "Fusionner", "Forcer Faux Positif"] as const;
 export type ConflictAction = (typeof CONFLICT_ACTIONS)[number];
 
+export const CAMPAIGN_STATUSES = ["PLANNED", "ACTIVE", "COMPLETED"] as const;
+export type CampaignStatus = (typeof CAMPAIGN_STATUSES)[number];
+
+export const TEAM_MEMBER_ROLES = ["OPERATOR", "SUPPORT"] as const;
+export type TeamMemberRole = (typeof TEAM_MEMBER_ROLES)[number];
+
+export const SYNC_SESSION_STATUSES = ["IN_PROGRESS", "COMPLETED", "FAILED"] as const;
+export type SyncSessionStatus = (typeof SYNC_SESSION_STATUSES)[number];
+
 export const FORM_FIELD_TYPES = ["text", "date", "multiple choice", "hierarchical selection", "photo"] as const;
 export type FormFieldType = (typeof FORM_FIELD_TYPES)[number];
 

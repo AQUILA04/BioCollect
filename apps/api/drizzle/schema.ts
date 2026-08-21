@@ -10,7 +10,7 @@ import {
   uniqueIndex,
   varchar,
 } from "drizzle-orm/mysql-core";
-import { CONFLICT_ACTIONS, SUBMISSION_STATUSES, TENANT_ROLES, USER_ROLES } from "../shared/biocollect";
+import { CAMPAIGN_STATUSES, CONFLICT_ACTIONS, SUBMISSION_STATUSES, SYNC_SESSION_STATUSES, TEAM_MEMBER_ROLES, TENANT_ROLES, USER_ROLES } from "../shared/biocollect";
 
 /** Core user table backing the Manus OAuth flow. */
 export const users = mysqlTable("users", {
@@ -130,6 +130,50 @@ export const biometricConfigs = mysqlTable("biometricConfigs", {
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 }, table => [uniqueIndex("biometric_config_project_unique").on(table.projectId)]);
 
+export const campaigns = mysqlTable("campaigns", {
+  id: varchar("id", { length: 36 }).primaryKey(),
+  projectId: varchar("projectId", { length: 36 }).notNull(),
+  name: varchar("name", { length: 160 }).notNull(),
+  description: text("description"),
+  startDate: timestamp("startDate").notNull(),
+  endDate: timestamp("endDate"),
+  status: mysqlEnum("status", CAMPAIGN_STATUSES).default("PLANNED").notNull(),
+  createdBy: int("createdBy").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+}, table => [index("campaigns_project_idx").on(table.projectId), index("campaigns_status_idx").on(table.status)]);
+
+export const teams = mysqlTable("teams", {
+  id: varchar("id", { length: 36 }).primaryKey(),
+  campaignId: varchar("campaignId", { length: 36 }).notNull(),
+  name: varchar("name", { length: 160 }).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+}, table => [uniqueIndex("teams_campaign_name_unique").on(table.campaignId, table.name), index("teams_campaign_idx").on(table.campaignId)]);
+
+export const teamMembers = mysqlTable("teamMembers", {
+  id: varchar("id", { length: 36 }).primaryKey(),
+  teamId: varchar("teamId", { length: 36 }).notNull(),
+  userId: int("userId").notNull(),
+  role: mysqlEnum("role", TEAM_MEMBER_ROLES).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, table => [uniqueIndex("team_members_team_user_unique").on(table.teamId, table.userId), index("team_members_user_idx").on(table.userId), index("team_members_team_role_idx").on(table.teamId, table.role)]);
+
+export const syncSessions = mysqlTable("syncSessions", {
+  id: varchar("id", { length: 36 }).primaryKey(),
+  campaignId: varchar("campaignId", { length: 36 }).notNull(),
+  teamId: varchar("teamId", { length: 36 }).notNull(),
+  operatorId: int("operatorId").notNull(),
+  totalOffline: int("totalOffline").notNull(),
+  selectedForSync: int("selectedForSync").notNull(),
+  receivedCount: int("receivedCount").default(0).notNull(),
+  failedCount: int("failedCount").default(0).notNull(),
+  deduplicationSuccessCount: int("deduplicationSuccessCount").default(0).notNull(),
+  status: mysqlEnum("status", SYNC_SESSION_STATUSES).default("IN_PROGRESS").notNull(),
+  startedAt: timestamp("startedAt").defaultNow().notNull(),
+  completedAt: timestamp("completedAt"),
+}, table => [index("sync_sessions_campaign_idx").on(table.campaignId), index("sync_sessions_team_idx").on(table.teamId), index("sync_sessions_operator_idx").on(table.operatorId), index("sync_sessions_started_idx").on(table.startedAt)]);
+
 export const submissions = mysqlTable("submissions", {
   id: varchar("id", { length: 36 }).primaryKey(),
   projectId: varchar("projectId", { length: 36 }).notNull(),
@@ -175,6 +219,10 @@ export type ReferenceDataSetVersion = typeof referenceDataSetVersions.$inferSele
 export type SelectionType = typeof selectionTypes.$inferSelect;
 export type SelectionTypeNode = typeof selectionTypeNodes.$inferSelect;
 export type Project = typeof projects.$inferSelect;
+export type Campaign = typeof campaigns.$inferSelect;
+export type Team = typeof teams.$inferSelect;
+export type TeamMember = typeof teamMembers.$inferSelect;
+export type SyncSession = typeof syncSessions.$inferSelect;
 export type FormSchema = typeof formSchemas.$inferSelect;
 export type BiometricConfig = typeof biometricConfigs.$inferSelect;
 export type Submission = typeof submissions.$inferSelect;

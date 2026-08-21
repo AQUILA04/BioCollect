@@ -22,12 +22,20 @@ export type FormDefinition = {
   steps?: BioCollectFormStep[];
 };
 
+export type CampaignAssignment = {
+  campaignId: string;
+  campaignName: string;
+  teamId: string;
+  teamName: string;
+};
+
 export type ProjectSnapshot = {
   projectId: string;
   projectName: string;
   requiredFingers: string[];
   nfiqThreshold: number;
   matchingThreshold: number;
+  campaigns?: CampaignAssignment[];
   forms: FormDefinition[];
   downloadedAt: number;
 };
@@ -45,6 +53,7 @@ export type QueuedSubmission = {
   id: string;
   tenantId: string;
   projectId: string;
+  campaignId?: string;
   formId: string;
   data: Record<string, string>;
   attachments: BiometricAttachment[];

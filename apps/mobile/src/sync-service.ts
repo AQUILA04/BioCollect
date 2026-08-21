@@ -2,11 +2,11 @@ import type { OfflineState, ProjectSnapshot, QueuedSubmission } from "./domain";
 import { OfflineStore } from "./offline-store";
 
 export type PullResult = { projects: ProjectSnapshot[]; serverTime: number };
-export type PushResult = { acceptedSubmissionIds: string[]; rejected: Array<{ id: string; reason: string }> };
+export type PushResult = { syncSessionId?: string | null; acceptedSubmissionIds: string[]; rejected: Array<{ id: string; reason: string }> };
 
 export interface SyncTransport {
   pull(input: { tenantId: string; accessToken: string }): Promise<PullResult>;
-  push(input: { tenantId: string; accessToken: string; submissions: QueuedSubmission[] }): Promise<PushResult>;
+  push(input: { tenantId: string; accessToken: string; campaignId?: string; totalOffline: number; selectedForSync: number; submissions: QueuedSubmission[] }): Promise<PushResult>;
 }
 
 export class SyncService {
@@ -23,9 +23,21 @@ export class SyncService {
   async push(state: OfflineState): Promise<OfflineState> {
     if (!state.session) throw new Error("Session agent requise pour synchroniser les dossiers.");
     if (!state.queue.length) return state;
-    const result = await this.transport.push({ tenantId: state.session.tenantId, accessToken: state.session.accessToken, submissions: state.queue });
-    const accepted = new Set(result.acceptedSubmissionIds);
-    const rejected = new Set(result.rejected.map(item => item.id));
+    const groups = new Map<string, QueuedSubmission[]>();
+    state.queue.forEach(submission => {
+      const key = submission.campaignId ?? "__legacy__";
+      groups.set(key, [...(groups.get(key) ?? []), submission]);
+    });
+    const results = await Promise.all([...groups.entries()].map(([campaignId, submissions]) => this.transport.push({
+      tenantId: state.session!.tenantId,
+      accessToken: state.session!.accessToken,
+      campaignId: campaignId === "__legacy__" ? undefined : campaignId,
+      totalOffline: state.queue.length,
+      selectedForSync: submissions.length,
+      submissions,
+    })));
+    const accepted = new Set(results.flatMap(result => result.acceptedSubmissionIds));
+    const rejected = new Set(results.flatMap(result => result.rejected.map(item => item.id)));
     const next = {
       ...state,
       queue: state.queue
@@ -52,6 +64,6 @@ export function createHttpSyncTransport(baseUrl: string): SyncTransport {
   }
   return {
     pull: ({ tenantId, accessToken }) => request<PullResult>(`/api/mobile/sync/pull?tenantId=${encodeURIComponent(tenantId)}`, accessToken),
-    push: ({ tenantId, accessToken, submissions }) => request<PushResult>("/api/mobile/sync/push", accessToken, { tenantId, submissions }),
+    push: ({ tenantId, accessToken, campaignId, totalOffline, selectedForSync, submissions }) => request<PushResult>("/api/mobile/sync/push", accessToken, { tenantId, campaignId, totalOffline, selectedForSync, submissions }),
   };
 }

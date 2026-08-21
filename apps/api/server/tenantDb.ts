@@ -1,7 +1,7 @@
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, inArray } from "drizzle-orm";
 import { nanoid } from "nanoid";
-import { biometricAttachments, biometricConfigs, formSchemas, projects, referenceDataSets, referenceDataSetVersions, selectionTypeNodes, selectionTypes, submissions, tenantMemberships, tenants, users } from "../drizzle/schema";
-import type { BiometricAttachmentInput, FormField, FormStep, SelectionOption, SelectionTypeLevel, SelectionTypeNode, TenantRole, UserRole } from "../shared/biocollect";
+import { biometricAttachments, biometricConfigs, campaigns, formSchemas, projects, referenceDataSets, referenceDataSetVersions, selectionTypeNodes, selectionTypes, submissions, syncSessions, teamMembers, teams, tenantMemberships, tenants, users } from "../drizzle/schema";
+import type { BiometricAttachmentInput, CampaignStatus, FormField, FormStep, SelectionOption, SelectionTypeLevel, SelectionTypeNode, SyncSessionStatus, TeamMemberRole, TenantRole, UserRole } from "../shared/biocollect";
 import { getDb } from "./db";
 
 async function requireDb() {
@@ -193,6 +193,145 @@ export async function listTenantConflictCases(tenantId: string) {
     const targetAttachments = target ? await db.select().from(biometricAttachments).where(eq(biometricAttachments.submissionId, target.id)) : [];
     return { source: { ...source, attachments: sourceAttachments }, target: target ? { ...target, attachments: targetAttachments } : null, similarityScore: source.similarityScore };
   }));
+}
+
+export async function listTenantInvestigators(tenantId: string) {
+  const db = await requireDb();
+  return db.select({ id: users.id, name: users.name, email: users.email, tenantRole: tenantMemberships.role })
+    .from(tenantMemberships)
+    .innerJoin(users, eq(tenantMemberships.userId, users.id))
+    .where(eq(tenantMemberships.tenantId, tenantId))
+    .orderBy(users.name);
+}
+
+export async function getTenantCampaign(tenantId: string, campaignId: string) {
+  const db = await requireDb();
+  const result = await db.select({ campaign: campaigns, project: projects })
+    .from(campaigns)
+    .innerJoin(projects, eq(campaigns.projectId, projects.id))
+    .where(and(eq(campaigns.id, campaignId), eq(projects.tenantId, tenantId)))
+    .limit(1);
+  return result[0] ?? null;
+}
+
+export async function listTenantCampaigns(tenantId: string, projectId?: string) {
+  const db = await requireDb();
+  const rows = await db.select({ campaign: campaigns, projectName: projects.name })
+    .from(campaigns)
+    .innerJoin(projects, eq(campaigns.projectId, projects.id))
+    .where(and(eq(projects.tenantId, tenantId), projectId ? eq(campaigns.projectId, projectId) : undefined))
+    .orderBy(desc(campaigns.startDate));
+  return Promise.all(rows.map(async ({ campaign, projectName }) => {
+    const campaignTeams = await db.select({ id: teams.id }).from(teams).where(eq(teams.campaignId, campaign.id));
+    const teamIds = campaignTeams.map(team => team.id);
+    const sessionCount = teamIds.length ? (await db.select({ id: syncSessions.id }).from(syncSessions).where(inArray(syncSessions.teamId, teamIds))).length : 0;
+    return { ...campaign, projectName, teamCount: teamIds.length, syncSessionCount: sessionCount };
+  }));
+}
+
+export async function createTenantCampaign(input: { tenantId: string; projectId: string; name: string; description?: string; startDate: Date; endDate?: Date; status: CampaignStatus; createdBy: number }) {
+  if (input.endDate && input.endDate < input.startDate) throw new Error("La date de fin doit être postérieure à la date de début.");
+  if (!await getTenantProjectConfiguration(input.tenantId, input.projectId)) throw new Error("Projet introuvable dans cet espace.");
+  const db = await requireDb();
+  const publishedForm = await db.select({ id: formSchemas.id }).from(formSchemas).where(and(eq(formSchemas.projectId, input.projectId), eq(formSchemas.isPublished, true))).limit(1);
+  if (!publishedForm[0]) throw new Error("Publiez au moins un formulaire avant de créer une campagne.");
+  const id = nanoid(20);
+  await db.insert(campaigns).values({ id, projectId: input.projectId, name: input.name, description: input.description ?? null, startDate: input.startDate, endDate: input.endDate ?? null, status: input.status, createdBy: input.createdBy });
+  return getTenantCampaign(input.tenantId, id);
+}
+
+export async function updateTenantCampaignStatus(input: { tenantId: string; campaignId: string; status: CampaignStatus; endDate?: Date | null }) {
+  const existing = await getTenantCampaign(input.tenantId, input.campaignId);
+  if (!existing) return null;
+  if (input.endDate && input.endDate < existing.campaign.startDate) throw new Error("La date de fin doit être postérieure à la date de début.");
+  const db = await requireDb();
+  await db.update(campaigns).set({ status: input.status, endDate: input.endDate ?? existing.campaign.endDate }).where(eq(campaigns.id, input.campaignId));
+  return getTenantCampaign(input.tenantId, input.campaignId);
+}
+
+async function loadTeamDetails(team: typeof teams.$inferSelect) {
+  const db = await requireDb();
+  const members = await db.select({ id: teamMembers.id, userId: users.id, name: users.name, email: users.email, role: teamMembers.role, createdAt: teamMembers.createdAt })
+    .from(teamMembers)
+    .innerJoin(users, eq(teamMembers.userId, users.id))
+    .where(eq(teamMembers.teamId, team.id));
+  return { ...team, members };
+}
+
+export async function listTenantTeams(tenantId: string, campaignId: string) {
+  if (!await getTenantCampaign(tenantId, campaignId)) return [];
+  const db = await requireDb();
+  const result = await db.select().from(teams).where(eq(teams.campaignId, campaignId)).orderBy(teams.name);
+  return Promise.all(result.map(loadTeamDetails));
+}
+
+export async function createTenantTeam(input: { tenantId: string; campaignId: string; name: string; members: Array<{ userId: number; role: TeamMemberRole }> }) {
+  const campaign = await getTenantCampaign(input.tenantId, input.campaignId);
+  if (!campaign) throw new Error("Campagne introuvable dans cet espace.");
+  if (input.members.length < 2 || input.members.length > 3) throw new Error("Une équipe terrain doit comporter entre deux et trois membres.");
+  if (new Set(input.members.map(member => member.userId)).size !== input.members.length) throw new Error("Un même enquêteur ne peut pas être affecté deux fois à une équipe.");
+  if (input.members.filter(member => member.role === "OPERATOR").length !== 1) throw new Error("Chaque équipe doit avoir exactement un opérateur de saisie.");
+  const staff = await listTenantInvestigators(input.tenantId);
+  if (input.members.some(member => !staff.some(person => person.id === member.userId))) throw new Error("Chaque membre doit appartenir à cet espace d’entité.");
+  const db = await requireDb();
+  const campaignTeams = await db.select({ id: teams.id }).from(teams).where(eq(teams.campaignId, input.campaignId));
+  if (campaignTeams.length) {
+    const assigned = await db.select({ userId: teamMembers.userId }).from(teamMembers).where(inArray(teamMembers.teamId, campaignTeams.map(team => team.id)));
+    if (input.members.some(member => assigned.some(existing => existing.userId === member.userId))) throw new Error("Un enquêteur ne peut appartenir qu’à une seule équipe dans une campagne.");
+  }
+  const id = nanoid(20);
+  await db.transaction(async tx => {
+    await tx.insert(teams).values({ id, campaignId: input.campaignId, name: input.name });
+    await tx.insert(teamMembers).values(input.members.map(member => ({ id: nanoid(20), teamId: id, userId: member.userId, role: member.role })));
+  });
+  return loadTeamDetails((await db.select().from(teams).where(eq(teams.id, id)).limit(1))[0]!);
+}
+
+export async function getMobileCampaignAssignments(tenantId: string, operatorId: number) {
+  const db = await requireDb();
+  return db.select({ campaignId: campaigns.id, campaignName: campaigns.name, projectId: campaigns.projectId, teamId: teams.id, teamName: teams.name })
+    .from(teamMembers)
+    .innerJoin(teams, eq(teamMembers.teamId, teams.id))
+    .innerJoin(campaigns, eq(teams.campaignId, campaigns.id))
+    .innerJoin(projects, eq(campaigns.projectId, projects.id))
+    .where(and(eq(teamMembers.userId, operatorId), eq(teamMembers.role, "OPERATOR"), eq(campaigns.status, "ACTIVE"), eq(projects.tenantId, tenantId)));
+}
+
+export async function getActiveOperatorCampaignAssignment(input: { tenantId: string; campaignId: string; operatorId: number; projectId: string }) {
+  const db = await requireDb();
+  const result = await db.select({ campaignId: campaigns.id, teamId: teams.id })
+    .from(teamMembers)
+    .innerJoin(teams, eq(teamMembers.teamId, teams.id))
+    .innerJoin(campaigns, eq(teams.campaignId, campaigns.id))
+    .innerJoin(projects, eq(campaigns.projectId, projects.id))
+    .where(and(eq(teamMembers.userId, input.operatorId), eq(teamMembers.role, "OPERATOR"), eq(campaigns.id, input.campaignId), eq(campaigns.status, "ACTIVE"), eq(campaigns.projectId, input.projectId), eq(projects.tenantId, input.tenantId)))
+    .limit(1);
+  return result[0] ?? null;
+}
+
+export async function createSyncSession(input: { campaignId: string; teamId: string; operatorId: number; totalOffline: number; selectedForSync: number }) {
+  const db = await requireDb();
+  const id = nanoid(20);
+  await db.insert(syncSessions).values({ id, ...input });
+  return id;
+}
+
+export async function updateSyncSessionProgress(input: { syncSessionId: string; receivedCount: number; failedCount: number; deduplicationSuccessCount: number; status?: SyncSessionStatus }) {
+  const db = await requireDb();
+  await db.update(syncSessions).set({ receivedCount: input.receivedCount, failedCount: input.failedCount, deduplicationSuccessCount: input.deduplicationSuccessCount, status: input.status ?? "IN_PROGRESS", completedAt: input.status ? new Date() : null }).where(eq(syncSessions.id, input.syncSessionId));
+}
+
+export async function listTenantSyncSessions(tenantId: string, campaignId?: string) {
+  const db = await requireDb();
+  const rows = await db.select({ session: syncSessions, campaign: campaigns, projectName: projects.name, team: teams, operator: users })
+    .from(syncSessions)
+    .innerJoin(campaigns, eq(syncSessions.campaignId, campaigns.id))
+    .innerJoin(projects, eq(campaigns.projectId, projects.id))
+    .innerJoin(teams, eq(syncSessions.teamId, teams.id))
+    .innerJoin(users, eq(syncSessions.operatorId, users.id))
+    .where(and(eq(projects.tenantId, tenantId), campaignId ? eq(campaigns.id, campaignId) : undefined))
+    .orderBy(desc(syncSessions.startedAt));
+  return Promise.all(rows.map(async ({ session, campaign, projectName, team, operator }) => ({ ...session, campaign: { id: campaign.id, name: campaign.name, projectId: campaign.projectId }, projectName, team: await loadTeamDetails(team), operator: { id: operator.id, name: operator.name, email: operator.email } })));
 }
 
 export async function assertTenantProject(tenantId: string, projectId: string) {

@@ -5,6 +5,7 @@ import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import Conflicts from "./pages/Conflicts";
 import FormBuilder from "./pages/FormBuilder";
+import FieldOperations from "./pages/FieldOperations";
 import Home from "./pages/Home";
 import Landing from "./pages/Landing";
 import NotFound from "./pages/NotFound";
@@ -22,6 +23,7 @@ function Router() {
       <Route path="/superadmin" component={Spaces} />
       <Route path="/projects" component={Projects} />
       <Route path="/forms" component={FormBuilder} />
+      <Route path="/field-operations" component={FieldOperations} />
       <Route path="/reference-data" component={ReferenceData} />
       <Route path="/selection-types" component={SelectionTypes} />
       <Route path="/conflicts" component={Conflicts} />

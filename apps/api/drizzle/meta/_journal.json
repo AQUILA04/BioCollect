@@ -57,6 +57,13 @@
       "when": 1787328243324,
       "tag": "0007_petite_quicksilver",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "5",
+      "when": 1787397600000,
+      "tag": "0008_campaigns_teams_sync_sessions",
+      "breakpoints": true
     }
   ]
 }
