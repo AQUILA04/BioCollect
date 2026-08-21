@@ -58,6 +58,7 @@ function setup(draft?: { currentStepId: string; data: Record<string, string> }) 
 
 const PressableHost = "Pressable" as unknown as React.ElementType;
 const TextInputHost = "TextInput" as unknown as React.ElementType;
+const TextHost = "Text" as unknown as React.ElementType;
 function button(root: TestRenderer.ReactTestInstance, label: string) { return root.findAllByType(PressableHost).find(item => item.props.accessibilityLabel === label); }
 
 describe("écran de collecte multi-étapes", () => {
@@ -84,5 +85,16 @@ describe("écran de collecte multi-étapes", () => {
     expect(finalButton?.props.disabled).toBe(false);
     await act(async () => { await finalButton?.props.onPress(); });
     expect(mobile.finalizeSubmission).toHaveBeenCalledWith(expect.objectContaining({ projectId: "project-1", formId: "form-1", data: { name: "Awa", income: "120" } }));
+  });
+
+  it("affiche le libellé d’un référentiel mais conserve son code dans le brouillon", async () => {
+    setup();
+    mobile.value.state.projects[0].forms = [{ id: "form-1", name: "Selection", fields: [{ id: "status", label: "Consentement", type: "multiple choice", required: true, options: [{ value: "true", label: "Oui" }, { value: "false", label: "Non" }] }], steps: [{ id: "selection", label: "Choix", order: 0, kind: "fields", fieldIds: ["status"] }] }];
+    let renderer!: TestRenderer.ReactTestRenderer;
+    await act(async () => { renderer = TestRenderer.create(<CollectScreen />); });
+    expect(renderer.root.findAllByType(TextHost).some(item => item.props.children === "Oui")).toBe(true);
+    const yes = renderer.root.findAllByType(PressableHost).find(item => item.props.accessibilityRole === "radio" && item.props.children?.props?.children === "Oui");
+    await act(async () => { yes?.props.onPress(); });
+    expect(mobile.saveDraft).toHaveBeenCalledWith(expect.objectContaining({ currentStepId: "selection", data: { status: "true" } }));
   });
 });

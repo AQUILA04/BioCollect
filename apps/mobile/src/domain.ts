@@ -1,4 +1,4 @@
-import type { BioCollectFormStep } from "@biocollect/form-engine";
+import type { BioCollectFormStep, BioCollectSelectionOption } from "@biocollect/form-engine";
 
 export type BiometricStatus = "DRAFT" | "SYNCED" | "PROCESSING" | "VALIDATED" | "SUSPECTED_DUPLICATE" | "REJECTED";
 export type FieldType = "text" | "date" | "multiple choice" | "photo";
@@ -8,7 +8,8 @@ export type FormField = {
   label: string;
   type: FieldType;
   required: boolean;
-  options?: string[];
+  options?: Array<string | BioCollectSelectionOption>;
+  referenceDataSetId?: string;
 };
 
 export type FormDefinition = {

@@ -3,16 +3,20 @@ import { z } from "zod";
 import { createSyncedSubmission, resolveConflict } from "../db";
 import { isValidMinioPath } from "../biocollect/mockScaleBiometrics";
 import { runMockDeduplication } from "../biocollect/submissionPipeline";
-import { assertTenantProject, createTenant, createTenantForm, createTenantProject, getTenantDashboard, getTenantProjectConfiguration, getTenantSyncBundle, listAllTenants, listTenantConflictCases, listTenantForms, listTenantProjects, listUserTenants, requireTenantRole, selectActiveTenant, tenantOwnsSubmission, updateTenantBySuperadmin, updateTenantProjectConfiguration } from "../tenantDb";
-import { CONFLICT_ACTIONS, FORM_FIELD_TYPES, FORM_STEP_KINDS, TENANT_ROLES } from "../../shared/biocollect";
+import { assertTenantProject, createTenant, createTenantForm, createTenantProject, createTenantReferenceDataSet, deleteTenantReferenceDataSet, getTenantDashboard, getTenantProjectConfiguration, getTenantReferenceDataSet, getTenantSyncBundle, listAllTenants, listTenantConflictCases, listTenantForms, listTenantProjects, listTenantReferenceDataSets, listUserTenants, requireTenantRole, selectActiveTenant, tenantOwnsSubmission, updateTenantBySuperadmin, updateTenantProjectConfiguration, updateTenantReferenceDataSet } from "../tenantDb";
+import { CONFLICT_ACTIONS, FORM_FIELD_TYPES, FORM_STEP_KINDS, TENANT_ROLES, type FormField, type SelectionOption } from "../../shared/biocollect";
 import { validateFormSteps } from "@biocollect/form-engine";
 import { protectedProcedure, router, superadminProcedure } from "../_core/trpc";
+import { normalizeSelectionOptions, parseReferenceDataFile } from "../reference-data";
+import { storagePut } from "../storage";
 
 const tenantIdSchema = z.object({ tenantId: z.string().min(1) });
 const projectIdSchema = z.object({ tenantId: z.string().min(1), projectId: z.string().min(1) });
+const selectionOptionSchema = z.object({ value: z.string().min(1).max(120), label: z.string().min(1).max(160) });
 const formFieldSchema = z.object({
   id: z.string().min(1), label: z.string().min(1).max(160), type: z.enum(FORM_FIELD_TYPES), required: z.boolean(),
-  options: z.array(z.string().min(1).max(120)).optional(),
+  options: z.array(z.union([z.string().min(1).max(160), selectionOptionSchema])).max(10_000).optional(),
+  referenceDataSetId: z.string().min(1).max(120).optional(),
   condition: z.object({ fieldId: z.string().min(1), operator: z.enum(["equals", "notEquals", "isFilled"]), value: z.string().optional() }).optional(),
 });
 const formStepSchema = z.object({
@@ -25,6 +29,27 @@ async function requireTenant(ctx: { user: { id: number; role: any } | null }, te
   const access = await requireTenantRole({ tenantId, userId: ctx.user.id, userRole: ctx.user.role, allowed });
   if (!access) throw new TRPCError({ code: "FORBIDDEN", message: "Vous n’avez pas accès à cet espace d’entité." });
   return access;
+}
+
+async function materializeFormFields(tenantId: string, fields: FormField[]) {
+  return Promise.all(fields.map(async field => {
+    if (field.referenceDataSetId && field.type !== "multiple choice") throw new TRPCError({ code: "BAD_REQUEST", message: "Seuls les champs de sélection peuvent utiliser un référentiel." });
+    if (field.type !== "multiple choice") return field;
+    if (field.referenceDataSetId) {
+      const referenceData = await getTenantReferenceDataSet(tenantId, field.referenceDataSetId);
+      if (!referenceData) throw new TRPCError({ code: "BAD_REQUEST", message: "Le référentiel sélectionné est introuvable dans cet espace." });
+      const options = normalizeSelectionOptions(referenceData.options as Array<string | SelectionOption>);
+      if (!options.length) throw new TRPCError({ code: "BAD_REQUEST", message: "Le référentiel sélectionné ne contient aucune option." });
+      return { ...field, options };
+    }
+    const options = normalizeSelectionOptions(field.options);
+    if (!options.length) throw new TRPCError({ code: "BAD_REQUEST", message: "Chaque champ de sélection doit contenir au moins une option." });
+    return { ...field, options };
+  }));
+}
+
+function safeSourceFileName(fileName: string) {
+  return fileName.replace(/[^a-zA-Z0-9._-]+/g, "-").slice(0, 180) || "referentiel";
 }
 
 export const biocollectRouter = router({
@@ -42,12 +67,54 @@ export const biocollectRouter = router({
     configuration: protectedProcedure.input(projectIdSchema).query(async ({ ctx, input }) => { await requireTenant(ctx, input.tenantId, ["Administrateur", "Superviseur"]); return getTenantProjectConfiguration(input.tenantId, input.projectId); }),
     updateConfiguration: protectedProcedure.input(z.object({ tenantId: z.string().min(1), projectId: z.string().min(1), requiredFingers: z.array(z.string().min(2).max(60)).min(1).max(10), nfiqThreshold: z.number().int().min(1).max(5), matchingThreshold: z.number().int().min(1).max(100) })).mutation(async ({ ctx, input }) => { await requireTenant(ctx, input.tenantId, ["Administrateur"]); return updateTenantProjectConfiguration(input); }),
   }),
+  referenceData: router({
+    list: protectedProcedure.input(tenantIdSchema).query(async ({ ctx, input }) => { await requireTenant(ctx, input.tenantId, ["Administrateur", "Superviseur"]); return listTenantReferenceDataSets(input.tenantId); }),
+    create: protectedProcedure.input(z.object({ tenantId: z.string().min(1), type: z.string().regex(/^[a-z][a-z0-9_-]*$/).max(96), name: z.string().min(3).max(160), options: z.array(selectionOptionSchema).min(1).max(10_000) })).mutation(async ({ ctx, input }) => {
+      await requireTenant(ctx, input.tenantId, ["Administrateur"]);
+      const options = normalizeSelectionOptions(input.options);
+      if (new Set(options.map(option => option.value)).size !== options.length) throw new TRPCError({ code: "BAD_REQUEST", message: "Les valeurs d’un référentiel doivent être uniques." });
+      return createTenantReferenceDataSet({ ...input, options, createdBy: ctx.user!.id });
+    }),
+    update: protectedProcedure.input(z.object({ tenantId: z.string().min(1), referenceDataSetId: z.string().min(1), type: z.string().regex(/^[a-z][a-z0-9_-]*$/).max(96), name: z.string().min(3).max(160), options: z.array(selectionOptionSchema).min(1).max(10_000) })).mutation(async ({ ctx, input }) => {
+      await requireTenant(ctx, input.tenantId, ["Administrateur"]);
+      const options = normalizeSelectionOptions(input.options);
+      if (new Set(options.map(option => option.value)).size !== options.length) throw new TRPCError({ code: "BAD_REQUEST", message: "Les valeurs d’un référentiel doivent être uniques." });
+      const updated = await updateTenantReferenceDataSet({ ...input, options });
+      if (!updated) throw new TRPCError({ code: "NOT_FOUND", message: "Référentiel introuvable dans cet espace." });
+      return updated;
+    }),
+    delete: protectedProcedure.input(z.object({ tenantId: z.string().min(1), referenceDataSetId: z.string().min(1) })).mutation(async ({ ctx, input }) => {
+      await requireTenant(ctx, input.tenantId, ["Administrateur"]);
+      if (!await deleteTenantReferenceDataSet(input.tenantId, input.referenceDataSetId)) throw new TRPCError({ code: "NOT_FOUND", message: "Référentiel introuvable dans cet espace." });
+      return { success: true };
+    }),
+    preview: protectedProcedure.input(z.object({ tenantId: z.string().min(1), fileName: z.string().min(3).max(255), contentBase64: z.string().min(4).max(7_000_000) })).mutation(async ({ ctx, input }) => {
+      await requireTenant(ctx, input.tenantId, ["Administrateur"]);
+      if (!/^[A-Za-z0-9+/]+={0,2}$/.test(input.contentBase64)) throw new TRPCError({ code: "BAD_REQUEST", message: "Le contenu du fichier est invalide." });
+      const parsed = parseReferenceDataFile({ fileName: input.fileName, buffer: Buffer.from(input.contentBase64, "base64") });
+      return { rowCount: parsed.rowCount, columns: parsed.columns, mapping: parsed.mapping, options: parsed.options.slice(0, 8) };
+    }),
+    import: protectedProcedure.input(z.object({ tenantId: z.string().min(1), referenceDataSetId: z.string().min(1).optional(), type: z.string().regex(/^[a-z][a-z0-9_-]*$/).max(96), name: z.string().min(3).max(160), fileName: z.string().min(3).max(255), mimeType: z.string().max(160).optional(), contentBase64: z.string().min(4).max(7_000_000) })).mutation(async ({ ctx, input }) => {
+      await requireTenant(ctx, input.tenantId, ["Administrateur"]);
+      if (!/^[A-Za-z0-9+/]+={0,2}$/.test(input.contentBase64)) throw new TRPCError({ code: "BAD_REQUEST", message: "Le contenu du fichier est invalide." });
+      const buffer = Buffer.from(input.contentBase64, "base64");
+      const parsed = parseReferenceDataFile({ fileName: input.fileName, buffer });
+      const source = await storagePut(`reference-data/${input.tenantId}/${input.type}/${safeSourceFileName(input.fileName)}`, buffer, input.mimeType || "application/octet-stream");
+      if (input.referenceDataSetId) {
+        const updated = await updateTenantReferenceDataSet({ tenantId: input.tenantId, referenceDataSetId: input.referenceDataSetId, type: input.type, name: input.name, options: parsed.options, sourceFileName: input.fileName, sourceFileKey: source.key, sourceFileMime: input.mimeType });
+        if (!updated) throw new TRPCError({ code: "NOT_FOUND", message: "Référentiel introuvable dans cet espace." });
+        return updated;
+      }
+      return createTenantReferenceDataSet({ tenantId: input.tenantId, type: input.type, name: input.name, options: parsed.options, createdBy: ctx.user!.id, sourceFileName: input.fileName, sourceFileKey: source.key, sourceFileMime: input.mimeType });
+    }),
+  }),
   forms: router({
     list: protectedProcedure.input(projectIdSchema).query(async ({ ctx, input }) => { await requireTenant(ctx, input.tenantId, ["Administrateur", "Superviseur"]); return listTenantForms(input.tenantId, input.projectId); }),
     create: protectedProcedure.input(z.object({ tenantId: z.string().min(1), projectId: z.string().min(1), name: z.string().min(3).max(160), fields: z.array(formFieldSchema).min(1).max(100), steps: z.array(formStepSchema).min(1).max(24).optional(), isPublished: z.boolean() })).mutation(async ({ ctx, input }) => {
       await requireTenant(ctx, input.tenantId, ["Administrateur"]);
-      if (input.steps?.length && validateFormSteps(input.fields, input.steps).length) throw new TRPCError({ code: "BAD_REQUEST", message: "La structure des étapes du formulaire est invalide." });
-      return createTenantForm(input);
+      const fields = await materializeFormFields(input.tenantId, input.fields);
+      if (input.steps?.length && validateFormSteps(fields, input.steps).length) throw new TRPCError({ code: "BAD_REQUEST", message: "La structure des étapes du formulaire est invalide." });
+      return createTenantForm({ ...input, fields });
     }),
   }),
   sync: router({

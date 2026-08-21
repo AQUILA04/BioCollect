@@ -48,6 +48,25 @@ export const tenantMemberships = mysqlTable("tenantMemberships", {
   index("tenant_memberships_user_idx").on(table.userId),
 ]);
 
+/** Reusable choice lists are scoped to a tenant and never crossed between entities. */
+export const referenceDataSets = mysqlTable("referenceDataSets", {
+  id: varchar("id", { length: 36 }).primaryKey(),
+  tenantId: varchar("tenantId", { length: 36 }).notNull(),
+  type: varchar("type", { length: 96 }).notNull(),
+  name: varchar("name", { length: 160 }).notNull(),
+  options: json("options").notNull(),
+  sourceFileName: varchar("sourceFileName", { length: 255 }),
+  sourceFileKey: varchar("sourceFileKey", { length: 1024 }),
+  sourceFileMime: varchar("sourceFileMime", { length: 160 }),
+  sourceRowCount: int("sourceRowCount").notNull().default(0),
+  createdBy: int("createdBy").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+}, table => [
+  uniqueIndex("reference_data_sets_tenant_type_unique").on(table.tenantId, table.type),
+  index("reference_data_sets_tenant_idx").on(table.tenantId),
+]);
+
 export const projects = mysqlTable("projects", {
   id: varchar("id", { length: 36 }).primaryKey(),
   tenantId: varchar("tenantId", { length: 36 }).notNull().default("legacy-tenant"),
@@ -124,6 +143,7 @@ export type User = typeof users.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;
 export type Tenant = typeof tenants.$inferSelect;
 export type TenantMembership = typeof tenantMemberships.$inferSelect;
+export type ReferenceDataSet = typeof referenceDataSets.$inferSelect;
 export type Project = typeof projects.$inferSelect;
 export type FormSchema = typeof formSchemas.$inferSelect;
 export type BiometricConfig = typeof biometricConfigs.$inferSelect;

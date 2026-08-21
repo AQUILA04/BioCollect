@@ -20,12 +20,33 @@ export type ConflictAction = (typeof CONFLICT_ACTIONS)[number];
 export const FORM_FIELD_TYPES = ["text", "date", "multiple choice", "photo"] as const;
 export type FormFieldType = (typeof FORM_FIELD_TYPES)[number];
 
+export type SelectionOption = {
+  value: string;
+  label: string;
+};
+
+export type LegacyOrSelectionOption = string | SelectionOption;
+
+export type ReferenceDataSet = {
+  id: string;
+  tenantId: string;
+  type: string;
+  name: string;
+  options: SelectionOption[];
+  sourceFileName?: string | null;
+  sourceFileKey?: string | null;
+  createdAt?: Date;
+  updatedAt?: Date;
+};
+
 export type FormField = {
   id: string;
   label: string;
   type: FormFieldType;
   required: boolean;
-  options?: string[];
+  /** Legacy string arrays remain valid and are normalized at persistence or display time. */
+  options?: LegacyOrSelectionOption[];
+  referenceDataSetId?: string;
   condition?: {
     fieldId: string;
     operator: "equals" | "notEquals" | "isFilled";

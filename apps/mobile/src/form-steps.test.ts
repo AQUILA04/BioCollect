@@ -28,6 +28,14 @@ describe("form steps", () => {
     expect(issues).toEqual(expect.arrayContaining(["field-assignment", "field-unassigned", "biometrics-duplicate"]));
   });
 
+  it("accepte les options de sélection code/libellé tout en conservant les options historiques", () => {
+    const selectionFields = [
+      { id: "status", label: "Statut", type: "multiple choice" as const, required: true, options: [{ value: "true", label: "Oui" }, { value: "false", label: "Non" }] },
+      { id: "legacy", label: "Ancien choix", type: "multiple choice" as const, required: false, options: ["A"] },
+    ];
+    expect(validateFormSteps(selectionFields, [{ id: "selection", label: "Sélection", order: 0, kind: "fields", fieldIds: ["status", "legacy"] }])).toEqual([]);
+  });
+
   it("restaure les brouillons sans affecter la file finale de synchronisation", async () => {
     const store = new OfflineStore(new MemoryStore());
     const state: OfflineState = {

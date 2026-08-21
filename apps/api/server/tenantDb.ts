@@ -1,7 +1,7 @@
 import { and, desc, eq } from "drizzle-orm";
 import { nanoid } from "nanoid";
-import { biometricAttachments, biometricConfigs, formSchemas, projects, submissions, tenantMemberships, tenants, users } from "../drizzle/schema";
-import type { BiometricAttachmentInput, FormField, FormStep, TenantRole, UserRole } from "../shared/biocollect";
+import { biometricAttachments, biometricConfigs, formSchemas, projects, referenceDataSets, submissions, tenantMemberships, tenants, users } from "../drizzle/schema";
+import type { BiometricAttachmentInput, FormField, FormStep, SelectionOption, TenantRole, UserRole } from "../shared/biocollect";
 import { getDb } from "./db";
 
 async function requireDb() {
@@ -68,6 +68,39 @@ export async function requireTenantRole(input: { tenantId: string; userId: numbe
 export async function listTenantProjects(tenantId: string) {
   const db = await requireDb();
   return db.select().from(projects).where(eq(projects.tenantId, tenantId)).orderBy(desc(projects.createdAt));
+}
+
+export async function listTenantReferenceDataSets(tenantId: string) {
+  const db = await requireDb();
+  return db.select().from(referenceDataSets).where(eq(referenceDataSets.tenantId, tenantId)).orderBy(desc(referenceDataSets.updatedAt));
+}
+
+export async function getTenantReferenceDataSet(tenantId: string, referenceDataSetId: string) {
+  const db = await requireDb();
+  return (await db.select().from(referenceDataSets).where(and(eq(referenceDataSets.id, referenceDataSetId), eq(referenceDataSets.tenantId, tenantId))).limit(1))[0] ?? null;
+}
+
+export async function createTenantReferenceDataSet(input: { tenantId: string; type: string; name: string; options: SelectionOption[]; createdBy: number; sourceFileName?: string; sourceFileKey?: string; sourceFileMime?: string }) {
+  const db = await requireDb();
+  const id = nanoid(20);
+  await db.insert(referenceDataSets).values({ id, tenantId: input.tenantId, type: input.type, name: input.name, options: input.options, createdBy: input.createdBy, sourceFileName: input.sourceFileName ?? null, sourceFileKey: input.sourceFileKey ?? null, sourceFileMime: input.sourceFileMime ?? null, sourceRowCount: input.options.length });
+  return getTenantReferenceDataSet(input.tenantId, id);
+}
+
+export async function updateTenantReferenceDataSet(input: { tenantId: string; referenceDataSetId: string; type: string; name: string; options: SelectionOption[]; sourceFileName?: string | null; sourceFileKey?: string | null; sourceFileMime?: string | null }) {
+  const db = await requireDb();
+  const existing = await getTenantReferenceDataSet(input.tenantId, input.referenceDataSetId);
+  if (!existing) return null;
+  await db.update(referenceDataSets).set({ type: input.type, name: input.name, options: input.options, sourceFileName: input.sourceFileName ?? existing.sourceFileName, sourceFileKey: input.sourceFileKey ?? existing.sourceFileKey, sourceFileMime: input.sourceFileMime ?? existing.sourceFileMime, sourceRowCount: input.options.length }).where(eq(referenceDataSets.id, input.referenceDataSetId));
+  return getTenantReferenceDataSet(input.tenantId, input.referenceDataSetId);
+}
+
+export async function deleteTenantReferenceDataSet(tenantId: string, referenceDataSetId: string) {
+  const db = await requireDb();
+  const existing = await getTenantReferenceDataSet(tenantId, referenceDataSetId);
+  if (!existing) return false;
+  await db.delete(referenceDataSets).where(eq(referenceDataSets.id, referenceDataSetId));
+  return true;
 }
 
 export async function createTenantProject(input: { tenantId: string; name: string; description?: string; createdBy: number; requiredFingers: string[]; nfiqThreshold: number; matchingThreshold: number }) {

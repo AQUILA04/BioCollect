@@ -9,6 +9,7 @@ import Home from "./pages/Home";
 import Landing from "./pages/Landing";
 import NotFound from "./pages/NotFound";
 import Projects from "./pages/Projects";
+import ReferenceData from "./pages/ReferenceData";
 import Spaces from "./pages/Spaces";
 
 function Router() {
@@ -20,6 +21,7 @@ function Router() {
       <Route path="/superadmin" component={Spaces} />
       <Route path="/projects" component={Projects} />
       <Route path="/forms" component={FormBuilder} />
+      <Route path="/reference-data" component={ReferenceData} />
       <Route path="/conflicts" component={Conflicts} />
       <Route path="/404" component={NotFound} />
       <Route component={NotFound} />

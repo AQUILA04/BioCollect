@@ -4,12 +4,18 @@ export type FieldCondition = {
   value?: string;
 };
 
+export type BioCollectSelectionOption = {
+  value: string;
+  label: string;
+};
+
 export type BioCollectFormField = {
   id: string;
   label: string;
   type: "text" | "date" | "multiple choice" | "photo";
   required: boolean;
-  options?: string[];
+  options?: Array<string | BioCollectSelectionOption>;
+  referenceDataSetId?: string;
   condition?: FieldCondition;
 };
 
