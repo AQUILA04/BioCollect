@@ -20,20 +20,23 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 import { startLogin } from "@/const";
+import { useI18n } from "@/contexts/I18nContext";
+import type { TranslationKey } from "@biocollect/i18n";
 import { useIsMobile } from "@/hooks/useMobile";
 import { Building2, Crown, FilePenLine, FolderKanban, GitCompareArrows, LayoutDashboard, LogOut, PanelLeft } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { DashboardLayoutSkeleton } from './DashboardLayoutSkeleton';
+import { LanguageSelector } from "./LanguageSelector";
 import { Button } from "./ui/button";
 
-const menuItems = [
-  { icon: LayoutDashboard, label: "Vue d’ensemble", path: "/app", roles: ["Superadmin", "Administrateur", "Superviseur", "Enquêteur"] },
-  { icon: FolderKanban, label: "Projets", path: "/projects", roles: ["Superadmin", "Administrateur", "Superviseur", "Enquêteur"] },
-  { icon: FilePenLine, label: "Form Builder", path: "/forms", roles: ["Superadmin", "Administrateur", "Superviseur", "Enquêteur"] },
-  { icon: GitCompareArrows, label: "Conflits", path: "/conflicts", roles: ["Superadmin", "Administrateur", "Superviseur", "Enquêteur"] },
-  { icon: Building2, label: "Mes espaces", path: "/spaces", roles: ["Superadmin", "Administrateur", "Superviseur", "Enquêteur"] },
-  { icon: Crown, label: "Superadmin", path: "/superadmin", roles: ["Superadmin"] },
+const menuItems = (t: (key: TranslationKey) => string) => [
+  { icon: LayoutDashboard, label: t("navigation.dashboard"), path: "/app", roles: ["Superadmin", "Administrateur", "Superviseur", "Enquêteur"] },
+  { icon: FolderKanban, label: t("navigation.projects"), path: "/projects", roles: ["Superadmin", "Administrateur", "Superviseur", "Enquêteur"] },
+  { icon: FilePenLine, label: t("navigation.forms"), path: "/forms", roles: ["Superadmin", "Administrateur", "Superviseur", "Enquêteur"] },
+  { icon: GitCompareArrows, label: t("navigation.conflicts"), path: "/conflicts", roles: ["Superadmin", "Administrateur", "Superviseur", "Enquêteur"] },
+  { icon: Building2, label: t("navigation.spaces"), path: "/spaces", roles: ["Superadmin", "Administrateur", "Superviseur", "Enquêteur"] },
+  { icon: Crown, label: t("navigation.superadmin"), path: "/superadmin", roles: ["Superadmin"] },
 ];
 
 const SIDEBAR_WIDTH_KEY = "sidebar-width";
@@ -51,6 +54,7 @@ export default function DashboardLayout({
     return saved ? parseInt(saved, 10) : DEFAULT_WIDTH;
   });
   const { loading, user } = useAuth();
+  const { t } = useI18n();
 
   useEffect(() => {
     localStorage.setItem(SIDEBAR_WIDTH_KEY, sidebarWidth.toString());
@@ -66,10 +70,10 @@ export default function DashboardLayout({
         <div className="flex flex-col items-center gap-8 p-8 max-w-md w-full">
           <div className="flex flex-col items-center gap-6">
             <h1 className="text-2xl font-semibold tracking-tight text-center">
-              Connectez-vous pour continuer
+              {t("auth.continue")}
             </h1>
             <p className="text-sm text-muted-foreground text-center max-w-sm">
-              L’accès au back-office BioCollect nécessite une authentification.
+              {t("auth.protectedArea")}
             </p>
           </div>
           <Button
@@ -77,7 +81,7 @@ export default function DashboardLayout({
             size="lg"
             className="w-full shadow-lg hover:shadow-xl transition-all"
           >
-            Se connecter
+            {t("auth.signIn")}
           </Button>
         </div>
       </div>
@@ -114,8 +118,10 @@ function DashboardLayoutContent({
   const isCollapsed = state === "collapsed";
   const [isResizing, setIsResizing] = useState(false);
   const sidebarRef = useRef<HTMLDivElement>(null);
-  const activeMenuItem = menuItems.find(item => item.path === location);
   const isMobile = useIsMobile();
+  const { t } = useI18n();
+  const navigationItems = menuItems(t);
+  const activeMenuItem = navigationItems.find(item => item.path === location);
 
   useEffect(() => {
     if (isCollapsed) {
@@ -166,7 +172,7 @@ function DashboardLayoutContent({
               <button
                 onClick={toggleSidebar}
                 className="h-8 w-8 flex items-center justify-center hover:bg-accent rounded-lg transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring shrink-0"
-                aria-label="Toggle navigation"
+                aria-label={t("navigation.toggleNavigation")}
               >
                 <PanelLeft className="h-4 w-4 text-muted-foreground" />
               </button>
@@ -182,7 +188,7 @@ function DashboardLayoutContent({
 
           <SidebarContent className="gap-0">
             <SidebarMenu className="px-2 py-1">
-              {menuItems.filter(item => user && item.roles.includes(user.role)).map(item => {
+              {navigationItems.filter(item => user && item.roles.includes(user.role)).map(item => {
                 const isActive = location === item.path;
                 return (
                   <SidebarMenuItem key={item.path}>
@@ -204,6 +210,9 @@ function DashboardLayoutContent({
           </SidebarContent>
 
           <SidebarFooter className="p-3">
+            <div className="mb-2 flex px-1 group-data-[collapsible=icon]:justify-center">
+              <LanguageSelector compact={isCollapsed} />
+            </div>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <button className="flex items-center gap-3 rounded-lg px-1 py-1 hover:bg-accent/50 transition-colors w-full text-left group-data-[collapsible=icon]:justify-center focus:outline-none focus-visible:ring-2 focus-visible:ring-ring">
@@ -228,7 +237,7 @@ function DashboardLayoutContent({
                   className="cursor-pointer text-destructive focus:text-destructive"
                 >
                   <LogOut className="mr-2 h-4 w-4" />
-                  <span>Se déconnecter</span>
+                  <span>{t("auth.signOut")}</span>
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
@@ -252,7 +261,7 @@ function DashboardLayoutContent({
               <div className="flex items-center gap-3">
                 <div className="flex flex-col gap-1">
                   <span className="tracking-tight text-foreground">
-                    {activeMenuItem?.label ?? "Menu"}
+                    {activeMenuItem?.label ?? t("common.menu")}
                   </span>
                 </div>
               </div>

@@ -6,6 +6,7 @@ import { emptyOfflineState } from "./domain";
 import { activateAgent, enqueueSubmission } from "./mobile-workflow";
 import { OfflineStore } from "./offline-store";
 import { createHttpSyncTransport, SyncService } from "./sync-service";
+import { useI18n } from "./i18n-context";
 
 type MobileContextValue = {
   ready: boolean;
@@ -26,6 +27,7 @@ const apiBaseUrl = (Constants.expoConfig?.extra?.biocollectApiUrl as string | un
 function makeId(prefix: string) { return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`; }
 
 export function MobileProvider({ children }: { children: ReactNode }) {
+  const { t } = useI18n();
   const [state, setState] = useState<OfflineState>(emptyOfflineState());
   const [ready, setReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -36,11 +38,11 @@ export function MobileProvider({ children }: { children: ReactNode }) {
   async function activate(session: AgentSession) { setError(null); await persist(activateAgent(state, session)); }
   async function signOut() { setError(null); await persist({ ...state, session: null }); }
   function service() {
-    if (!apiBaseUrl) throw new Error("Configurez EXPO_PUBLIC_BIOCOLLECT_API_URL pour joindre l’API de synchronisation.");
+    if (!apiBaseUrl) throw new Error(t("mobile.apiUrlRequired"));
     return new SyncService(store, createHttpSyncTransport(apiBaseUrl));
   }
-  async function pull() { try { setError(null); const next = await service().pull(state); setState(next); } catch (cause) { setError(cause instanceof Error ? cause.message : "Téléchargement impossible."); } }
-  async function push() { try { setError(null); const next = await service().push(state); setState(next); } catch (cause) { setError(cause instanceof Error ? cause.message : "Synchronisation impossible."); } }
+  async function pull() { try { setError(null); const next = await service().pull(state); setState(next); } catch (cause) { setError(cause instanceof Error ? cause.message : t("mobile.downloadFailed")); } }
+  async function push() { try { setError(null); const next = await service().push(state); setState(next); } catch (cause) { setError(cause instanceof Error ? cause.message : t("mobile.synchronizationFailed")); } }
   async function queueSubmission(input: Omit<QueuedSubmission, "id" | "queuedAt" | "retryCount" | "status" | "tenantId">) {
     const next = enqueueSubmission(state, input, makeId("submission"), Date.now());
     await persist(next);

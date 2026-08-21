@@ -1,0 +1,7 @@
+{
+  "name": "@biocollect/i18n",
+  "version": "0.1.0",
+  "private": true,
+  "main": "src/index.ts",
+  "scripts": { "generate": "node scripts/generate-locales.mjs", "pretest": "pnpm run generate", "test": "pnpm --dir ../../apps/mobile test -- i18n.test.ts" }
+}

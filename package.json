@@ -7,8 +7,9 @@
   "scripts": {
     "dev": "pnpm --dir apps/api dev",
     "build": "pnpm --dir apps/api build",
-    "check": "pnpm --dir apps/api check && pnpm --dir apps/mobile check",
-    "test": "pnpm --dir apps/api test && pnpm --dir apps/mobile test",
+    "generate:locales": "pnpm --dir packages/i18n generate",
+    "check": "pnpm generate:locales && pnpm --dir apps/api check && pnpm --dir apps/mobile check",
+    "test": "pnpm generate:locales && pnpm --dir apps/api test && pnpm --dir apps/mobile test",
     "mobile:check": "pnpm --dir apps/mobile check",
     "mobile:test": "pnpm --dir apps/mobile test",
     "mobile:start": "pnpm --dir apps/mobile start"
