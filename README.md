@@ -4,17 +4,16 @@
 
 ## État du MVP
 
-Le MVP met en œuvre la gestion des projets biométriques, la conception de formulaires, la synchronisation protégée, le workflow de dossier, un mock autonome de déduplication, le tableau de supervision et la résolution de conflits. Il inclut également une landing page publique et une isolation multi-tenant : chaque entité possède son propre espace de données. Le rôle global **Superadmin** peut créer et administrer les tenants.
+Le MVP met en œuvre la gestion des projets biométriques, la conception de formulaires, la synchronisation protégée, le workflow de dossier, un mock autonome de déduplication, le tableau de supervision et la résolution de conflits. Les interfaces de supervision sont accessibles aux rôles **Administrateur** et **Superviseur**, tandis que les procédures de synchronisation sont réservées au rôle **Enquêteur**.
 
 | Zone | Responsabilité | Éléments implémentés |
 |---|---|---|
 | `apps/web` | Back-office React | Tableau de bord, projets, Form Builder et résolution de conflits |
 | `apps/api` | API TypeScript | Schéma Drizzle, RBAC, synchronisation Pull/Push et mock ScaleBiometrics |
-| `apps/mobile` | Client terrain React Native | Service offline de file d’attente et de synchronisation indépendant du framework |
+| `apps/mobile` | Client terrain Expo / React Native | Activation agent, sélection de formulaires, collecte offline, captures biométriques simulées, file locale et synchronisation Pull/Push |
 | `packages/form-engine` | Logique de formulaires | Évaluation des règles de visibilité conditionnelle |
 | `packages/biometric-sdk-bridge` | Abstraction matérielle | Contrat de provider biométrique pour Miaxis et fournisseurs futurs |
 | `contracts` | Contrats inter-applications | Contrat de synchronisation versionné |
-| `docs/MULTI_TENANCY.md` | Sécurité d’accès | Modèle de tenants, appartenances et règles d’isolation |
 
 ## Pré-requis et commandes
 
@@ -27,7 +26,11 @@ pnpm test
 pnpm dev
 ```
 
-La commande `pnpm dev` démarre l’API et son intégration Vite avec le back-office. La commande `pnpm mobile:start` est prévue pour lancer le shell Expo lorsque l’environnement mobile est installé.
+La commande `pnpm dev` démarre l’API et son intégration Vite avec le back-office. La commande `pnpm mobile:start` démarre le client Expo : utilisez ensuite Expo Go sur appareil ou `w` pour sa prévisualisation web.
+
+## Application mobile terrain
+
+Le client `apps/mobile` met en œuvre le parcours Enquêteur : activation locale par tenant et jeton, téléchargement de projets et formulaires publiés, saisie offline, capture biométrique simulée avec référence `minio://`, file de dossiers persistée localement et reprise Pull/Push. Le protocole HTTP attendu est décrit dans [`contracts/mobile-sync.v1.md`](contracts/mobile-sync.v1.md). Les routes serveur correspondantes restent à raccorder au service API du monorepo.
 
 ## Modèle métier
 
@@ -46,8 +49,6 @@ Le contrat `contracts/sync.v1.md` décrit les opérations `biocollect.sync.pull`
 
 ## Base de données et tests
 
-La migration PostgreSQL de référence est disponible dans `apps/api/db/postgres/0001_biocollect_mvp.sql`. Elle définit les six tables du MVP avec des types ENUM, JSONB, contraintes de qualité et index. Le runtime de prévisualisation utilise la base relationnelle gérée disponible dans l’environnement ; sa migration Drizzle équivalente est placée dans `apps/api/drizzle`.
-
-Le test de la plateforme couvre les transitions interdites, le mock de déduplication, la validation des chemins MinIO, les autorisations de rôles, le pipeline Push complet et les décisions de conflit. La suite Vitest contient actuellement **13 tests**.
+Les migrations Drizzle de l’API sont placées dans `apps/api/drizzle`. Le test de la plateforme couvre les transitions interdites, le mock de déduplication, la validation des chemins MinIO, les autorisations de rôles, le pipeline Push complet et les décisions de conflit. Le client mobile ajoute des scénarios de persistance locale, Pull, Push, rejet et parcours offline complet.
 
 Les choix d’architecture complémentaires sont documentés dans [`docs/MONOREPO_IMPLEMENTATION.md`](docs/MONOREPO_IMPLEMENTATION.md), et les spécifications produit d’origine restent disponibles dans le dossier [`docs`](docs).

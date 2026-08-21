@@ -1,0 +1,13 @@
+{
+  "expo": {
+    "name": "BioCollect Terrain",
+    "slug": "biocollect-terrain",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "scheme": "biocollect",
+    "extra": { "biocollectApiUrl": "" },
+    "plugins": ["expo-router"],
+    "experiments": { "typedRoutes": true }
+  }
+}
