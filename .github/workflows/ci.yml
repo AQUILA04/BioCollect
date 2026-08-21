@@ -84,7 +84,7 @@ jobs:
 
       - name: Define image metadata
         id: meta
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@v6
         with:
           images: ghcr.io/aquila04/biocollect
           tags: |
