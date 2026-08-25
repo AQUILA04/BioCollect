@@ -43,9 +43,9 @@ services:
       PORT: "3000"
       DATABASE_URL: ${DATABASE_URL:?DATABASE_URL is required}
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
-      OAUTH_SERVER_URL: ${OAUTH_SERVER_URL:-}
+      OIDC_ISSUER_URI: ${OIDC_ISSUER_URI:-https://auth.optimizesolux.com/realms/biocollect}
+      OIDC_CLIENT_ID: ${OIDC_CLIENT_ID:-biocollect-web}
       OWNER_OPEN_ID: ${OWNER_OPEN_ID:-}
-      VITE_APP_ID: ${VITE_APP_ID:-}
     networks:
       - optimizesolux-common
       - traefik-public

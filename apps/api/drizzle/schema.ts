@@ -12,7 +12,7 @@ import {
 } from "drizzle-orm/mysql-core";
 import { CAMPAIGN_STATUSES, CONFLICT_ACTIONS, SUBMISSION_STATUSES, SYNC_SESSION_STATUSES, TEAM_MEMBER_ROLES, TENANT_ROLES, USER_ROLES } from "../shared/biocollect";
 
-/** Core user table backing the Manus OAuth flow. */
+/** Core user table — identity keyed by IdP subject (`openId` = Keycloak `sub`). */
 export const users = mysqlTable("users", {
   id: int("id").autoincrement().primaryKey(),
   openId: varchar("openId", { length: 64 }).notNull().unique(),

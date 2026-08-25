@@ -80,9 +80,9 @@ _db_pass="${BC_DB_PASSWORD:-CHANGE_ME_prod_db_password}"
 _db_name="${BC_DB_NAME:-biocollect}"
 _app_host="${BC_APP_HOSTNAME_PROD:-biocollect.optimizesolux.com}"
 _jwt="${BC_JWT_SECRET:-CHANGE_ME_openssl_rand_base64_32}"
-_oauth="${BC_OAUTH_SERVER_URL:-}"
+_oidc_issuer="${BC_OIDC_ISSUER_URI:-https://auth.optimizesolux.com/realms/biocollect}"
+_oidc_client="${BC_OIDC_CLIENT_ID:-biocollect-web}"
 _owner="${BC_OWNER_OPEN_ID:-}"
-_vite_app="${BC_VITE_APP_ID:-}"
 _redis_db="${BC_REDIS_DATABASE:-7}"
 
 _db_pass_enc="$(urlencode "$_db_pass")"
@@ -90,7 +90,7 @@ _database_url="mysql://${_db_user}:${_db_pass_enc}@mysql:3306/${_db_name}"
 
 _db_pass_q="$(env_quote "$_db_pass")"
 _jwt_q="$(env_quote "$_jwt")"
-_oauth_q="$(env_quote "$_oauth")"
+_oidc_issuer_q="$(env_quote "$_oidc_issuer")"
 _database_url_q="$(env_quote "$_database_url")"
 
 PROD_ENV="$ROOT/prod/.env"
@@ -98,7 +98,7 @@ if [[ ! -f "$PROD_ENV" ]]; then
   cat > "$PROD_ENV" << EOF
 # =============================================================================
 # BioCollect PROD — $ROOT/prod/.env
-# Auth: Manus OAuth. Redis index reserved: ${_redis_db}
+# Auth: Keycloak OIDC (realm biocollect). Redis index reserved: ${_redis_db}
 # =============================================================================
 DB_USER=${_db_user}
 DB_PASSWORD=${_db_pass_q}
@@ -107,9 +107,9 @@ DATABASE_URL=${_database_url_q}
 
 APP_HOSTNAME=${_app_host}
 JWT_SECRET=${_jwt_q}
-OAUTH_SERVER_URL=${_oauth_q}
+OIDC_ISSUER_URI=${_oidc_issuer_q}
+OIDC_CLIENT_ID=${_oidc_client}
 OWNER_OPEN_ID=${_owner}
-VITE_APP_ID=${_vite_app}
 
 REDIS_DATABASE=${_redis_db}
 

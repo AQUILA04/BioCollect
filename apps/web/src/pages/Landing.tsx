@@ -88,9 +88,18 @@ export default function Landing() {
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
-  function enter() {
-    if (isAuthenticated) setLocation("/spaces");
-    else startLogin();
+  function goToSpaces() {
+    setLocation("/spaces");
+  }
+
+  function signIn() {
+    if (isAuthenticated) goToSpaces();
+    else startLogin({ mode: "login" });
+  }
+
+  function createWorkspace() {
+    if (isAuthenticated) goToSpaces();
+    else startLogin({ mode: "register" });
   }
 
   function closeMenu() {
@@ -134,10 +143,22 @@ export default function Landing() {
 
           <div className="hidden items-center gap-2 md:flex">
             <LanguageSelector />
-            <Button onClick={enter} className="group bg-white text-slate-950 hover:bg-slate-100">
-              {isAuthenticated ? t("landing.login") : t("landing.createSpace")}
-              <ArrowRight className="landing-cta-arrow ml-2 h-4 w-4" />
-            </Button>
+            {isAuthenticated ? (
+              <Button onClick={goToSpaces} className="group bg-white text-slate-950 hover:bg-slate-100">
+                {t("landing.login")}
+                <ArrowRight className="landing-cta-arrow ml-2 h-4 w-4" />
+              </Button>
+            ) : (
+              <>
+                <Button variant="ghost" onClick={signIn} className="text-slate-200 hover:bg-white/10 hover:text-white">
+                  {t("landing.signIn")}
+                </Button>
+                <Button onClick={createWorkspace} className="group bg-white text-slate-950 hover:bg-slate-100">
+                  {t("landing.createSpace")}
+                  <ArrowRight className="landing-cta-arrow ml-2 h-4 w-4" />
+                </Button>
+              </>
+            )}
           </div>
 
           <div className="flex items-center gap-1 md:hidden">
@@ -167,9 +188,20 @@ export default function Landing() {
                 <a href="#espaces" onClick={closeMenu}>
                   {t("landing.spaces")}
                 </a>
-                <Button onClick={() => { closeMenu(); enter(); }} className="w-full bg-white text-slate-950">
-                  {t("landing.createSpace")}
-                </Button>
+                {isAuthenticated ? (
+                  <Button onClick={() => { closeMenu(); goToSpaces(); }} className="w-full bg-white text-slate-950">
+                    {t("landing.login")}
+                  </Button>
+                ) : (
+                  <>
+                    <Button variant="outline" onClick={() => { closeMenu(); signIn(); }} className="w-full border-white/20 bg-white/5 text-white hover:bg-white/10 hover:text-white">
+                      {t("landing.signIn")}
+                    </Button>
+                    <Button onClick={() => { closeMenu(); createWorkspace(); }} className="w-full bg-white text-slate-950">
+                      {t("landing.createSpace")}
+                    </Button>
+                  </>
+                )}
               </div>
             </motion.div>
           ) : null}
@@ -190,7 +222,7 @@ export default function Landing() {
               </h1>
               <p className="mt-6 max-w-xl text-lg leading-8 text-slate-300">{t("landing.heroText")}</p>
               <div className="mt-9 flex flex-col gap-3 sm:flex-row">
-                <Button size="lg" onClick={enter} className="group bg-blue-500 shadow-lg shadow-blue-500/25 hover:bg-blue-400">
+                <Button size="lg" onClick={createWorkspace} className="group bg-blue-500 shadow-lg shadow-blue-500/25 hover:bg-blue-400">
                   {t("landing.createFree")}
                   <ArrowRight className="landing-cta-arrow ml-2 h-4 w-4" />
                 </Button>
@@ -223,7 +255,7 @@ export default function Landing() {
                 {t("landing.heroText")}
               </motion.p>
               <motion.div variants={heroItem} className="mt-9 flex flex-col gap-3 sm:flex-row">
-                <Button size="lg" onClick={enter} className="group bg-blue-500 shadow-lg shadow-blue-500/25 hover:bg-blue-400">
+                <Button size="lg" onClick={createWorkspace} className="group bg-blue-500 shadow-lg shadow-blue-500/25 hover:bg-blue-400">
                   {t("landing.createFree")}
                   <ArrowRight className="landing-cta-arrow ml-2 h-4 w-4" />
                 </Button>
@@ -306,7 +338,7 @@ export default function Landing() {
             </div>
             <h2 className="mt-6 text-3xl font-semibold tracking-tight sm:text-4xl">{t("landing.spacesTitle")}</h2>
             <p className="mx-auto mt-5 max-w-2xl leading-7 text-slate-600">{t("landing.spacesDescription")}</p>
-            <Button size="lg" onClick={enter} className="group mt-8 bg-slate-950 hover:bg-slate-800">
+            <Button size="lg" onClick={createWorkspace} className="group mt-8 bg-slate-950 hover:bg-slate-800">
               {t("landing.createEntitySpace")}
               <FolderKanban className="landing-cta-arrow ml-2 h-4 w-4" />
             </Button>

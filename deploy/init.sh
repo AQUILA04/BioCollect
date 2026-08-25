@@ -23,9 +23,9 @@ DB_PASSWORD=""
 DB_NAME=""
 APP_HOSTNAME_PROD=""
 JWT_SECRET=""
-OAUTH_SERVER_URL=""
+OIDC_ISSUER_URI=""
+OIDC_CLIENT_ID=""
 OWNER_OPEN_ID=""
-VITE_APP_ID=""
 REDIS_DATABASE=""
 GHCR_USERNAME=""
 GHCR_TOKEN=""
@@ -45,9 +45,9 @@ while [[ "$#" -gt 0 ]]; do
     --db-name)                    DB_NAME="$2";                    shift ;;
     --app-hostname-prod)          APP_HOSTNAME_PROD="$2";          shift ;;
     --jwt-secret)                 JWT_SECRET="$2";                 shift ;;
-    --oauth-server-url)           OAUTH_SERVER_URL="$2";           shift ;;
+    --oidc-issuer-uri)            OIDC_ISSUER_URI="$2";            shift ;;
+    --oidc-client-id)             OIDC_CLIENT_ID="$2";             shift ;;
     --owner-open-id)              OWNER_OPEN_ID="$2";              shift ;;
-    --vite-app-id)                VITE_APP_ID="$2";                shift ;;
     --redis-database)             REDIS_DATABASE="$2";             shift ;;
     --ghcr-username)              GHCR_USERNAME="$2";              shift ;;
     --ghcr-token)                 GHCR_TOKEN="$2";                 shift ;;
@@ -57,6 +57,8 @@ while [[ "$#" -gt 0 ]]; do
       GITHUB_RAW="https://raw.githubusercontent.com/${GITHUB_REPO}/main/deploy"
       shift
       ;;
+    # Legacy Manus flags (ignored)
+    --oauth-server-url|--vite-app-id) shift ;;
     *) echo "Unknown parameter: $1" >&2; exit 1 ;;
   esac
   shift
@@ -101,9 +103,9 @@ if [[ ! -f "$SETUP_MARKER" ]]; then
   export BC_DB_NAME="${DB_NAME:-biocollect}"
   export BC_APP_HOSTNAME_PROD="${APP_HOSTNAME_PROD:-biocollect.optimizesolux.com}"
   export BC_JWT_SECRET="${JWT_SECRET:-}"
-  export BC_OAUTH_SERVER_URL="${OAUTH_SERVER_URL:-}"
+  export BC_OIDC_ISSUER_URI="${OIDC_ISSUER_URI:-}"
+  export BC_OIDC_CLIENT_ID="${OIDC_CLIENT_ID:-}"
   export BC_OWNER_OPEN_ID="${OWNER_OPEN_ID:-}"
-  export BC_VITE_APP_ID="${VITE_APP_ID:-}"
   export BC_REDIS_DATABASE="${REDIS_DATABASE:-7}"
 
   bash "$DEPLOY_DIR/setup-server.sh"
@@ -124,9 +126,9 @@ export BC_DB_PASSWORD="${DB_PASSWORD:-}"
 export BC_DB_NAME="${DB_NAME:-}"
 export BC_APP_HOSTNAME_PROD="${APP_HOSTNAME_PROD:-}"
 export BC_JWT_SECRET="${JWT_SECRET:-}"
-export BC_OAUTH_SERVER_URL="${OAUTH_SERVER_URL:-}"
+export BC_OIDC_ISSUER_URI="${OIDC_ISSUER_URI:-}"
+export BC_OIDC_CLIENT_ID="${OIDC_CLIENT_ID:-}"
 export BC_OWNER_OPEN_ID="${OWNER_OPEN_ID:-}"
-export BC_VITE_APP_ID="${VITE_APP_ID:-}"
 export BC_REDIS_DATABASE="${REDIS_DATABASE:-}"
 
 bash "$DEPLOY_DIR/deploy.sh" "$ENV" "$APP_IMAGE"

@@ -1,31 +1,68 @@
-import { OAUTH_STATE_COOKIE, encodeOAuthState } from "@shared/const";
+import {
+  OAUTH_STATE_COOKIE,
+  encodeOAuthState,
+  pkceChallengeS256,
+  randomPkceVerifier,
+} from "@shared/const";
 
 export { COOKIE_NAME, ONE_YEAR_MS } from "@shared/const";
 
-// Start the Manus OAuth login. Call this from an event handler or effect at the
-// moment you want to navigate, e.g. `onClick={() => startLogin()}`.
-//
-// It has SIDE EFFECTS — it mints a one-time nonce, writes the __Host- state
-// cookie, and navigates immediately — so the cookie nonce always matches the
-// `state` it sends. Do NOT call it during render (no `href={startLogin()}` /
-// `loginUrl={...}`): each call overwrites the cookie, so a stray render-phase
-// call would desync it from an in-flight login and the callback would reject it
-// with "invalid oauth state". It returns void by design, so there is no URL to
-// stash across renders.
-export const startLogin = () => {
-  const oauthPortalUrl = import.meta.env.VITE_OAUTH_PORTAL_URL;
-  const appId = import.meta.env.VITE_APP_ID;
+export type StartLoginOptions = {
+  /** Use Keycloak registration screen instead of login. */
+  mode?: "login" | "register";
+};
+
+function keycloakIssuer(): string {
+  const url = (import.meta.env.VITE_KEYCLOAK_URL as string | undefined)?.replace(
+    /\/$/,
+    ""
+  );
+  const realm =
+    (import.meta.env.VITE_KEYCLOAK_REALM as string | undefined) || "biocollect";
+  if (!url) {
+    console.error(
+      "[Auth] VITE_KEYCLOAK_URL is not set. Configure Keycloak URL for the SPA build."
+    );
+    return "";
+  }
+  return `${url}/realms/${realm}`;
+}
+
+/**
+ * Start Keycloak OIDC login (local account or optional Google SSO on the KC page).
+ * Call from an event handler — not during render — so the state cookie stays in sync.
+ */
+export const startLogin = (options?: StartLoginOptions) => {
+  const issuer = keycloakIssuer();
+  const clientId =
+    (import.meta.env.VITE_KEYCLOAK_CLIENT_ID as string | undefined) ||
+    "biocollect-web";
+  if (!issuer) return;
+
   const redirectUri = `${window.location.origin}/api/oauth/callback`;
-
   const nonce = crypto.randomUUID();
+  const codeVerifier = randomPkceVerifier();
+
   document.cookie = `${OAUTH_STATE_COOKIE}=${nonce}; Path=/; Max-Age=600; SameSite=None; Secure`;
-  const state = encodeOAuthState({ redirectUri, nonce });
 
-  const url = new URL(`${oauthPortalUrl}/app-auth`);
-  url.searchParams.set("appId", appId);
-  url.searchParams.set("redirectUri", redirectUri);
-  url.searchParams.set("state", state);
-  url.searchParams.set("type", "signIn");
+  void (async () => {
+    const codeChallenge = await pkceChallengeS256(codeVerifier);
+    const state = encodeOAuthState({ redirectUri, nonce, codeVerifier });
 
-  window.location.href = url.toString();
+    const path =
+      options?.mode === "register"
+        ? "protocol/openid-connect/registrations"
+        : "protocol/openid-connect/auth";
+
+    const url = new URL(`${issuer}/${path}`);
+    url.searchParams.set("client_id", clientId);
+    url.searchParams.set("redirect_uri", redirectUri);
+    url.searchParams.set("response_type", "code");
+    url.searchParams.set("scope", "openid profile email");
+    url.searchParams.set("state", state);
+    url.searchParams.set("code_challenge", codeChallenge);
+    url.searchParams.set("code_challenge_method", "S256");
+
+    window.location.href = url.toString();
+  })();
 };

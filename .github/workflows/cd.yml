@@ -114,7 +114,8 @@ jobs:
           PROD_DB_NAME: ${{ secrets.PROD_DB_NAME }}
           PROD_APP_HOSTNAME: ${{ secrets.PROD_APP_HOSTNAME }}
           JWT_SECRET: ${{ secrets.JWT_SECRET }}
-          OAUTH_SERVER_URL: ${{ secrets.OAUTH_SERVER_URL }}
+          OIDC_ISSUER_URI: ${{ secrets.OIDC_ISSUER_URI }}
+          OIDC_CLIENT_ID: ${{ secrets.OIDC_CLIENT_ID }}
           GITHUB_REPOSITORY: ${{ github.repository }}
         run: |
           set -euo pipefail
@@ -141,7 +142,8 @@ jobs:
             --db-name "$PROD_DB_NAME"
             --app-hostname-prod "$PROD_APP_HOSTNAME"
             --jwt-secret "$JWT_SECRET"
-            --oauth-server-url "$OAUTH_SERVER_URL"
+            --oidc-issuer-uri "$OIDC_ISSUER_URI"
+            --oidc-client-id "${OIDC_CLIENT_ID:-biocollect-web}"
             --redis-database "7"
             --github-repo "$GITHUB_REPOSITORY"
           )
@@ -179,7 +181,8 @@ jobs:
           PROD_DB_NAME: ${{ secrets.PROD_DB_NAME }}
           PROD_APP_HOSTNAME: ${{ secrets.PROD_APP_HOSTNAME }}
           JWT_SECRET: ${{ secrets.JWT_SECRET }}
-          OAUTH_SERVER_URL: ${{ secrets.OAUTH_SERVER_URL }}
+          OIDC_ISSUER_URI: ${{ secrets.OIDC_ISSUER_URI }}
+          OIDC_CLIENT_ID: ${{ secrets.OIDC_CLIENT_ID }}
           GITHUB_REPOSITORY: ${{ github.repository }}
         run: |
           set -euo pipefail
@@ -206,7 +209,8 @@ jobs:
             --db-name "$PROD_DB_NAME"
             --app-hostname-prod "$PROD_APP_HOSTNAME"
             --jwt-secret "$JWT_SECRET"
-            --oauth-server-url "$OAUTH_SERVER_URL"
+            --oidc-issuer-uri "$OIDC_ISSUER_URI"
+            --oidc-client-id "${OIDC_CLIENT_ID:-biocollect-web}"
             --redis-database "7"
             --github-repo "$GITHUB_REPOSITORY"
           )

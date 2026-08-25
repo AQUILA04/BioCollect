@@ -123,7 +123,8 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
-            VITE_OAUTH_PORTAL_URL=${{ secrets.VITE_OAUTH_PORTAL_URL }}
-            VITE_APP_ID=${{ secrets.VITE_APP_ID }}
+            VITE_KEYCLOAK_URL=${{ secrets.VITE_KEYCLOAK_URL }}
+            VITE_KEYCLOAK_REALM=${{ secrets.VITE_KEYCLOAK_REALM }}
+            VITE_KEYCLOAK_CLIENT_ID=${{ secrets.VITE_KEYCLOAK_CLIENT_ID }}
           cache-from: type=gha
           cache-to: type=gha,mode=max

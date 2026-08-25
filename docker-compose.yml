@@ -1,5 +1,7 @@
 # Local autonomous stack (laptop). No Traefik / common-infra required.
 # Usage: docker compose up --build
+#
+# Auth: Keycloak realm biocollect (local :8180). Prod uses auth.optimizesolux.com.
 
 services:
   mysql:
@@ -25,17 +27,43 @@ services:
       retries: 10
       start_period: 40s
 
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.2.5
+    restart: unless-stopped
+    command: start-dev --import-realm
+    environment:
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: admin
+      KC_HTTP_PORT: 8180
+      KC_HOSTNAME_STRICT: "false"
+      KC_HTTP_ENABLED: "true"
+      KC_HEALTH_ENABLED: "true"
+    volumes:
+      - ./deploy/keycloak/realms:/opt/keycloak/data/import:ro
+      - ./deploy/keycloak/themes/biocollect:/opt/keycloak/themes/biocollect:ro
+    ports:
+      - "8180:8180"
+    healthcheck:
+      test: ["CMD-SHELL", "exec 3<>/dev/tcp/127.0.0.1/8180 && echo -e 'GET /health/ready HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n' >&3 && cat <&3 | grep -q '200\\|UP'"]
+      interval: 20s
+      timeout: 10s
+      retries: 12
+      start_period: 90s
+
   app:
     build:
       context: .
       dockerfile: Dockerfile
       args:
-        VITE_OAUTH_PORTAL_URL: ${VITE_OAUTH_PORTAL_URL:-}
-        VITE_APP_ID: ${VITE_APP_ID:-}
+        VITE_KEYCLOAK_URL: ${VITE_KEYCLOAK_URL:-http://localhost:8180}
+        VITE_KEYCLOAK_REALM: ${VITE_KEYCLOAK_REALM:-biocollect}
+        VITE_KEYCLOAK_CLIENT_ID: ${VITE_KEYCLOAK_CLIENT_ID:-biocollect-web}
     restart: unless-stopped
     depends_on:
       mysql:
         condition: service_healthy
+      keycloak:
+        condition: service_started
     ports:
       - "3000:3000"
     environment:
@@ -43,7 +71,10 @@ services:
       PORT: "3000"
       DATABASE_URL: mysql://biocollect:biocollect@mysql:3306/biocollect
       JWT_SECRET: ${JWT_SECRET:-local-dev-jwt-secret-change-me}
-      OAUTH_SERVER_URL: ${OAUTH_SERVER_URL:-}
+      OIDC_ISSUER_URI: ${OIDC_ISSUER_URI:-http://keycloak:8180/realms/biocollect}
+      OIDC_CLIENT_ID: ${OIDC_CLIENT_ID:-biocollect-web}
+      # Browser reaches Keycloak on host port; issuer for redirects must be public URL
+      OIDC_PUBLIC_ISSUER_URI: ${OIDC_PUBLIC_ISSUER_URI:-http://localhost:8180/realms/biocollect}
 
 volumes:
   biocollect_mysql_data:

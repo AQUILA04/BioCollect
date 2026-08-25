@@ -5,11 +5,13 @@ WORKDIR /app
 ENV PNPM_HOME=/pnpm
 ENV PATH=$PNPM_HOME:$PATH
 
-# Bake Manus OAuth portal settings into the Vite SPA at build time.
-ARG VITE_OAUTH_PORTAL_URL=
-ARG VITE_APP_ID=
-ENV VITE_OAUTH_PORTAL_URL=$VITE_OAUTH_PORTAL_URL
-ENV VITE_APP_ID=$VITE_APP_ID
+# Bake Keycloak public settings into the Vite SPA at build time.
+ARG VITE_KEYCLOAK_URL=https://auth.optimizesolux.com
+ARG VITE_KEYCLOAK_REALM=biocollect
+ARG VITE_KEYCLOAK_CLIENT_ID=biocollect-web
+ENV VITE_KEYCLOAK_URL=$VITE_KEYCLOAK_URL
+ENV VITE_KEYCLOAK_REALM=$VITE_KEYCLOAK_REALM
+ENV VITE_KEYCLOAK_CLIENT_ID=$VITE_KEYCLOAK_CLIENT_ID
 
 COPY . .
 RUN corepack enable && pnpm install --frozen-lockfile

@@ -1,8 +1,9 @@
 # Secrets GitHub + DNS — BioCollect (OptimizeSolux Contabo)
 
-Prérequis VPS : **shared-traefik** (+ **optimize-common-infra** recommandé pour Redis/MinIO/OTel).
+Prérequis VPS : **shared-traefik** + **optimize-common-infra** (Keycloak realm `biocollect`).
 
-Auth produit : **Manus OAuth** (`OAUTH_SERVER_URL`) — pas de host `biocollect-auth`.
+Auth produit : **Keycloak OIDC** (`OIDC_ISSUER_URI=https://auth.optimizesolux.com/realms/biocollect`).  
+SSO Google optionnel : voir [`docs/GOOGLE-OIDC-SETUP.md`](../docs/GOOGLE-OIDC-SETUP.md).
 
 ## 1. DNS Cloudflare
 
@@ -28,9 +29,12 @@ Réutilise la même clé SSH que SharedTraefik / CleanTrack / eHealth si possibl
 | `PROD_DB_NAME` | `biocollect` |
 | `PROD_APP_HOSTNAME` | `biocollect.optimizesolux.com` |
 | `JWT_SECRET` | `openssl rand -base64 32` |
-| `OAUTH_SERVER_URL` | URL du serveur OAuth Manus (API) |
-| `VITE_OAUTH_PORTAL_URL` | URL portail OAuth (bake CI image) |
-| `VITE_APP_ID` | App ID Manus (bake CI image) |
+| `OIDC_ISSUER_URI` | `https://auth.optimizesolux.com/realms/biocollect` |
+| `OIDC_CLIENT_ID` | `biocollect-web` |
+| `VITE_KEYCLOAK_URL` | `https://auth.optimizesolux.com` (bake CI image) |
+| `VITE_KEYCLOAK_REALM` | `biocollect` |
+| `VITE_KEYCLOAK_CLIENT_ID` | `biocollect-web` |
+| `OWNER_OPEN_ID` | Keycloak `sub` du premier superadmin (optionnel) |
 
 Créer aussi l’**environment** GitHub Actions nommé `prod`.
 
@@ -39,6 +43,7 @@ Créer aussi l’**environment** GitHub Actions nommé `prod`.
 | URL | Rôle |
 |-----|------|
 | https://biocollect.optimizesolux.com | App (SPA + API same-origin) |
+| https://auth.optimizesolux.com/realms/biocollect | Keycloak realm (common-infra) |
 
 ## 4. Pipelines
 
@@ -56,3 +61,4 @@ Promote : déploie la dernière image publiée depuis l’historique `main` (tag
 - Secrets hors git : `/opt/biocollect/prod/.env`
 - Template : `deploy/.env.prod.example`
 - Redis DB index réservé : `7` (`biocollect:`)
+- Realm + thème Keycloak : `optimize-common-infra/images/keycloak/`

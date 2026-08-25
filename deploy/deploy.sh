@@ -160,9 +160,9 @@ if [[ "${BC_UPDATE_ENV_SECRETS:-}" == "true" ]]; then
   [[ -n "${BC_DB_PASSWORD:-}" ]] && set_env_var DB_PASSWORD "$BC_DB_PASSWORD"
   [[ -n "${BC_DB_NAME:-}" ]] && set_env_var DB_NAME "$BC_DB_NAME"
   [[ -n "${BC_JWT_SECRET:-}" ]] && set_env_var JWT_SECRET "$BC_JWT_SECRET"
-  [[ -n "${BC_OAUTH_SERVER_URL:-}" ]] && set_env_var OAUTH_SERVER_URL "$BC_OAUTH_SERVER_URL"
+  [[ -n "${BC_OIDC_ISSUER_URI:-}" ]] && set_env_var OIDC_ISSUER_URI "$BC_OIDC_ISSUER_URI"
+  [[ -n "${BC_OIDC_CLIENT_ID:-}" ]] && set_env_var OIDC_CLIENT_ID "$BC_OIDC_CLIENT_ID"
   [[ -n "${BC_OWNER_OPEN_ID:-}" ]] && set_env_var OWNER_OPEN_ID "$BC_OWNER_OPEN_ID"
-  [[ -n "${BC_VITE_APP_ID:-}" ]] && set_env_var VITE_APP_ID "$BC_VITE_APP_ID"
   [[ -n "${BC_REDIS_DATABASE:-}" ]] && set_env_var REDIS_DATABASE "$BC_REDIS_DATABASE"
 fi
 
