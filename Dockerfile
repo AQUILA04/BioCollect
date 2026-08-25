@@ -5,6 +5,12 @@ WORKDIR /app
 ENV PNPM_HOME=/pnpm
 ENV PATH=$PNPM_HOME:$PATH
 
+# Bake Manus OAuth portal settings into the Vite SPA at build time.
+ARG VITE_OAUTH_PORTAL_URL=
+ARG VITE_APP_ID=
+ENV VITE_OAUTH_PORTAL_URL=$VITE_OAUTH_PORTAL_URL
+ENV VITE_APP_ID=$VITE_APP_ID
+
 COPY . .
 RUN corepack enable && pnpm install --frozen-lockfile
 RUN pnpm generate:locales && pnpm --dir apps/api build

@@ -1,0 +1,49 @@
+# Local autonomous stack (laptop). No Traefik / common-infra required.
+# Usage: docker compose up --build
+
+services:
+  mysql:
+    image: mysql:8.4
+    restart: unless-stopped
+    environment:
+      MYSQL_USER: biocollect
+      MYSQL_PASSWORD: biocollect
+      MYSQL_DATABASE: biocollect
+      MYSQL_ROOT_PASSWORD: biocollect
+    ports:
+      - "3306:3306"
+    volumes:
+      - biocollect_mysql_data:/var/lib/mysql
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "mysqladmin ping -h 127.0.0.1 -ubiocollect -pbiocollect --silent || exit 1",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 40s
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        VITE_OAUTH_PORTAL_URL: ${VITE_OAUTH_PORTAL_URL:-}
+        VITE_APP_ID: ${VITE_APP_ID:-}
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+    ports:
+      - "3000:3000"
+    environment:
+      NODE_ENV: production
+      PORT: "3000"
+      DATABASE_URL: mysql://biocollect:biocollect@mysql:3306/biocollect
+      JWT_SECRET: ${JWT_SECRET:-local-dev-jwt-secret-change-me}
+      OAUTH_SERVER_URL: ${OAUTH_SERVER_URL:-}
+
+volumes:
+  biocollect_mysql_data:

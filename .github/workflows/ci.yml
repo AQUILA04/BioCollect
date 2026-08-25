@@ -122,5 +122,8 @@ jobs:
           platforms: linux/amd64
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            VITE_OAUTH_PORTAL_URL=${{ secrets.VITE_OAUTH_PORTAL_URL }}
+            VITE_APP_ID=${{ secrets.VITE_APP_ID }}
           cache-from: type=gha
           cache-to: type=gha,mode=max

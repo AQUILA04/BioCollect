@@ -1,0 +1,77 @@
+# PROD stack — project name: biocollect-prod
+# Host: biocollect.optimizesolux.com → app (API + SPA, port 3000)
+#
+# Prerequisite: shared-traefik on traefik-public
+#               + optimize-common-infra (optimizesolux-common) recommended
+# Start:
+#   docker compose -f docker-compose.prod.yml --project-name biocollect-prod \
+#     --env-file /opt/biocollect/prod/.env up -d
+
+services:
+  mysql:
+    image: mysql:8.4
+    restart: unless-stopped
+    environment:
+      MYSQL_USER: ${DB_USER:-biocollect}
+      MYSQL_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required}
+      MYSQL_DATABASE: ${DB_NAME:-biocollect}
+      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required}
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "mysqladmin ping -h 127.0.0.1 -u$$MYSQL_USER -p$$MYSQL_PASSWORD --silent || exit 1",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 40s
+    networks:
+      optimizesolux-common:
+        aliases: ["biocollect-db"]
+
+  app:
+    image: ${APP_IMAGE:?APP_IMAGE is required}
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      PORT: "3000"
+      DATABASE_URL: ${DATABASE_URL:?DATABASE_URL is required}
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
+      OAUTH_SERVER_URL: ${OAUTH_SERVER_URL:-}
+      OWNER_OPEN_ID: ${OWNER_OPEN_ID:-}
+      VITE_APP_ID: ${VITE_APP_ID:-}
+    networks:
+      - optimizesolux-common
+      - traefik-public
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=traefik-public"
+      - "traefik.http.routers.biocollect-prod-app.rule=Host(`${APP_HOSTNAME:-biocollect.optimizesolux.com}`)"
+      - "traefik.http.routers.biocollect-prod-app.entrypoints=websecure"
+      - "traefik.http.routers.biocollect-prod-app.tls.certresolver=letsencrypt"
+      - "traefik.http.services.biocollect-prod-app.loadbalancer.server.port=3000"
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "node -e \"fetch('http://127.0.0.1:3000/').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\"",
+        ]
+      interval: 20s
+      timeout: 5s
+      retries: 5
+      start_period: 45s
+
+volumes:
+  mysql_data:
+
+networks:
+  optimizesolux-common:
+    external: true
+  traefik-public:
+    external: true

@@ -176,3 +176,88 @@
     }
   }
 }
+
+@layer utilities {
+  html {
+    scroll-behavior: smooth;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    html {
+      scroll-behavior: auto;
+    }
+  }
+
+  .landing-nav-link {
+    @apply relative transition-colors duration-200 hover:text-white;
+  }
+
+  .landing-nav-link::after {
+    content: "";
+    @apply absolute -bottom-1 left-0 h-px w-0 bg-blue-300 transition-all duration-300;
+  }
+
+  .landing-nav-link:hover::after {
+    @apply w-full;
+  }
+
+  .landing-card-hover {
+    @apply transition-all duration-300 hover:-translate-y-1 hover:shadow-lg;
+  }
+
+  .landing-cta-arrow {
+    @apply transition-transform duration-300 group-hover:translate-x-1;
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    @keyframes landing-orb-pulse {
+      0%,
+      100% {
+        opacity: 0.55;
+        transform: scale(1);
+      }
+      50% {
+        opacity: 0.85;
+        transform: scale(1.06);
+      }
+    }
+
+    @keyframes landing-scan-sweep {
+      0% {
+        transform: translateX(-120%);
+      }
+      100% {
+        transform: translateX(420%);
+      }
+    }
+
+    @keyframes landing-grid-drift {
+      0% {
+        background-position:
+          0 0,
+          0 0,
+          0 0,
+          0 0;
+      }
+      100% {
+        background-position:
+          0 0,
+          0 0,
+          42px 42px,
+          42px 42px;
+      }
+    }
+
+    .landing-orb-pulse {
+      animation: landing-orb-pulse 7s ease-in-out infinite;
+    }
+
+    .landing-scan-line {
+      animation: landing-scan-sweep 2.8s ease-in-out infinite;
+    }
+
+    .landing-grid-drift {
+      animation: landing-grid-drift 24s linear infinite;
+    }
+  }
+}
