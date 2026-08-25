@@ -3,9 +3,9 @@ import { z } from "zod";
 import { createSyncedSubmission, resolveConflict } from "../db";
 import { isValidMinioPath } from "../biocollect/mockScaleBiometrics";
 import { runMockDeduplication } from "../biocollect/submissionPipeline";
-import { assertTenantProject, createTenant, createTenantCampaign, createTenantForm, createTenantProject, createTenantReferenceDataSet, createTenantSelectionType, createTenantTeam, deleteTenantReferenceDataSet, deleteTenantSelectionType, getTenantDashboard, getTenantProjectConfiguration, getTenantReferenceDataSet, getTenantSelectionType, getTenantSyncBundle, listAllTenants, listTenantCampaigns, listTenantConflictCases, listTenantForms, listTenantInvestigators, listTenantProjects, listTenantReferenceDataSetUsage, listTenantReferenceDataSetVersions, listTenantReferenceDataSets, listTenantSelectionTypes, listTenantSyncSessions, listTenantTeams, listUserTenants, requireTenantRole, selectActiveTenant, tenantOwnsSubmission, updateTenantBySuperadmin, updateTenantCampaignStatus, updateTenantProjectConfiguration, updateTenantReferenceDataSet, updateTenantSelectionType } from "../tenantDb";
-import { CAMPAIGN_STATUSES, CONFLICT_ACTIONS, FORM_FIELD_TYPES, FORM_STEP_KINDS, TEAM_MEMBER_ROLES, TENANT_ROLES, type FormField, type SelectionOption } from "../../shared/biocollect";
-import { validateFormSteps } from "@biocollect/form-engine";
+import { assertTenantProject, createTenant, createTenantCampaign, createTenantForm, createTenantProject, createTenantReferenceDataSet, createTenantSelectionType, createTenantTeam, deleteTenantFormDraft, deleteTenantReferenceDataSet, deleteTenantSelectionType, getTenantDashboard, getTenantPhoneValidationDefaults, getTenantProjectConfiguration, getTenantReferenceDataSet, getTenantSelectionType, getTenantSyncBundle, listAllTenants, listTenantCampaigns, listTenantConflictCases, listTenantFormDrafts, listTenantForms, listTenantInvestigators, listTenantProjects, listTenantReferenceDataSetUsage, listTenantReferenceDataSetVersions, listTenantReferenceDataSets, listTenantSelectionTypes, listTenantSyncSessions, listTenantTeams, listUserTenants, requireTenantRole, saveTenantFormDraft, selectActiveTenant, tenantOwnsSubmission, updateTenantBySuperadmin, updateTenantCampaignStatus, updateTenantPhoneValidationDefaults, updateTenantProjectConfiguration, updateTenantReferenceDataSet, updateTenantSelectionType } from "../tenantDb";
+import { CAMPAIGN_STATUSES, CONFLICT_ACTIONS, FORM_FIELD_TYPES, FORM_STEP_KINDS, TEAM_MEMBER_ROLES, TENANT_ROLES, TEXT_VALIDATION_FORMATS, type FormField, type SelectionOption } from "../../shared/biocollect";
+import { isValidRegex, validateFormSteps } from "@biocollect/form-engine";
 import { protectedProcedure, router, superadminProcedure } from "../_core/trpc";
 import { normalizeSelectionOptions, parseReferenceDataFile } from "../reference-data";
 import { storagePut } from "../storage";
@@ -16,8 +16,19 @@ const projectIdSchema = z.object({ tenantId: z.string().min(1), projectId: z.str
 const selectionOptionSchema = z.object({ value: z.string().min(1).max(120), label: z.string().min(1).max(160) });
 const selectionTypeLevelSchema = z.object({ id: z.string().min(1).max(96), label: z.string().min(1).max(80), order: z.number().int().min(0).max(15) });
 const selectionTypeNodeSchema = z.object({ id: z.string().min(1).max(36), levelId: z.string().min(1).max(96), value: z.string().min(1).max(120), label: z.string().min(1).max(160), parentNodeId: z.string().min(1).max(36).nullable().optional() });
+const fieldValidationSchema = z.object({
+  minLength: z.number().int().min(0).max(10_000).optional(),
+  maxLength: z.number().int().min(1).max(10_000).optional(),
+  textFormat: z.enum(TEXT_VALIDATION_FORMATS).optional(),
+  regex: z.string().min(1).max(500).optional(),
+  allowedPrefixes: z.array(z.string().regex(/^\d{1,16}$/)).max(20).optional(),
+  minDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  maxDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+});
 const formFieldSchema = z.object({
   id: z.string().min(1), label: z.string().min(1).max(160), type: z.enum(FORM_FIELD_TYPES), required: z.boolean(),
+  validation: fieldValidationSchema.optional(),
+  sexUseOther: z.boolean().optional(),
   options: z.array(z.union([z.string().min(1).max(160), selectionOptionSchema])).max(10_000).optional(),
   referenceDataSetId: z.string().min(1).max(120).optional(),
   referenceDataSetVersion: z.number().int().min(1).optional(),
@@ -36,9 +47,23 @@ async function requireTenant(ctx: { user: { id: number; role: any } | null }, te
   return access;
 }
 
+function assertPublishableFieldValidation(fields: FormField[]) {
+  for (const field of fields) {
+    const validation = field.validation;
+    if (!validation) continue;
+    if (validation.minLength !== undefined && validation.maxLength !== undefined && validation.minLength > validation.maxLength) throw new TRPCError({ code: "BAD_REQUEST", message: `La longueur minimale de « ${field.label} » ne peut pas dépasser la longueur maximale.` });
+    if (validation.minDate && validation.maxDate && validation.minDate > validation.maxDate) throw new TRPCError({ code: "BAD_REQUEST", message: `La date minimale de « ${field.label} » ne peut pas dépasser la date maximale.` });
+    if (field.type === "text" && validation.textFormat === "regex" && !isValidRegex(validation.regex)) throw new TRPCError({ code: "BAD_REQUEST", message: `L’expression régulière de « ${field.label} » est invalide.` });
+    if (field.type !== "text" && validation.textFormat && validation.textFormat !== "none") throw new TRPCError({ code: "BAD_REQUEST", message: `Le format texte ne peut être défini que pour un champ Texte.` });
+    if (field.type !== "phone" && validation.allowedPrefixes?.length) throw new TRPCError({ code: "BAD_REQUEST", message: `Les préfixes sont réservés aux champs Téléphone.` });
+    if (field.type !== "date" && (validation.minDate || validation.maxDate)) throw new TRPCError({ code: "BAD_REQUEST", message: `Les bornes de date sont réservées aux champs Date.` });
+  }
+}
+
 async function materializeFormFields(tenantId: string, fields: FormField[]) {
   return Promise.all(fields.map(async field => {
     if (field.referenceDataSetId && field.type !== "multiple choice") throw new TRPCError({ code: "BAD_REQUEST", message: "Seuls les champs de sélection peuvent utiliser un référentiel." });
+    if (field.type === "sex") return { ...field, sexUseOther: field.sexUseOther !== false, options: undefined, referenceDataSetId: undefined, referenceDataSetVersion: undefined };
     if (field.selectionTypeId && field.type !== "hierarchical selection") throw new TRPCError({ code: "BAD_REQUEST", message: "Seul un champ hiérarchique peut utiliser ce type personnalisé." });
     if (field.type === "hierarchical selection") { if (!field.selectionTypeId) throw new TRPCError({ code: "BAD_REQUEST", message: "Un type de sélection hiérarchique est obligatoire." }); const type = await getTenantSelectionType(tenantId, field.selectionTypeId); if (!type?.nodes?.length) throw new TRPCError({ code: "BAD_REQUEST", message: "Le type hiérarchique est introuvable ou ne contient aucun nœud." }); return { ...field, hierarchicalDefinition: { selectionTypeId: type.id, key: type.key, name: type.name, levels: type.levels, nodes: type.nodes } }; }
     if (field.type !== "multiple choice") return field;
@@ -152,11 +177,32 @@ export const biocollectRouter = router({
   }),
   forms: router({
     list: protectedProcedure.input(projectIdSchema).query(async ({ ctx, input }) => { await requireTenant(ctx, input.tenantId, ["Administrateur", "Superviseur"]); return listTenantForms(input.tenantId, input.projectId); }),
-    create: protectedProcedure.input(z.object({ tenantId: z.string().min(1), projectId: z.string().min(1), name: z.string().min(3).max(160), fields: z.array(formFieldSchema).min(1).max(100), steps: z.array(formStepSchema).min(1).max(24).optional(), isPublished: z.boolean() })).mutation(async ({ ctx, input }) => {
+    drafts: protectedProcedure.input(projectIdSchema).query(async ({ ctx, input }) => { await requireTenant(ctx, input.tenantId, ["Administrateur"]); return listTenantFormDrafts(input.tenantId, input.projectId); }),
+    saveDraft: protectedProcedure.input(z.object({ tenantId: z.string().min(1), projectId: z.string().min(1), draftId: z.string().min(1).max(36).optional(), name: z.string().min(1).max(160), fields: z.array(formFieldSchema).max(100), steps: z.array(formStepSchema).max(24).optional() })).mutation(async ({ ctx, input }) => {
       await requireTenant(ctx, input.tenantId, ["Administrateur"]);
+      const draft = await saveTenantFormDraft({ ...input, userId: ctx.user!.id });
+      if (!draft) throw new TRPCError({ code: "NOT_FOUND", message: "Brouillon introuvable dans cet espace." });
+      return draft;
+    }),
+    deleteDraft: protectedProcedure.input(z.object({ tenantId: z.string().min(1), projectId: z.string().min(1), draftId: z.string().min(1).max(36) })).mutation(async ({ ctx, input }) => {
+      await requireTenant(ctx, input.tenantId, ["Administrateur"]);
+      if (!await deleteTenantFormDraft(input.tenantId, input.projectId, input.draftId)) throw new TRPCError({ code: "NOT_FOUND", message: "Brouillon introuvable dans cet espace." });
+      return { success: true };
+    }),
+    phoneDefaults: protectedProcedure.input(tenantIdSchema).query(async ({ ctx, input }) => { await requireTenant(ctx, input.tenantId, ["Administrateur"]); return getTenantPhoneValidationDefaults(input.tenantId); }),
+    updatePhoneDefaults: protectedProcedure.input(z.object({ tenantId: z.string().min(1), validation: fieldValidationSchema.pick({ minLength: true, maxLength: true, allowedPrefixes: true }) })).mutation(async ({ ctx, input }) => {
+      await requireTenant(ctx, input.tenantId, ["Administrateur"]);
+      if (input.validation.minLength !== undefined && input.validation.maxLength !== undefined && input.validation.minLength > input.validation.maxLength) throw new TRPCError({ code: "BAD_REQUEST", message: "La longueur minimale ne peut pas dépasser la longueur maximale." });
+      return updateTenantPhoneValidationDefaults({ ...input, userId: ctx.user!.id });
+    }),
+    create: protectedProcedure.input(z.object({ tenantId: z.string().min(1), projectId: z.string().min(1), name: z.string().min(3).max(160), fields: z.array(formFieldSchema).min(1).max(100), steps: z.array(formStepSchema).min(1).max(24).optional(), isPublished: z.literal(true), draftId: z.string().min(1).max(36).optional() })).mutation(async ({ ctx, input }) => {
+      await requireTenant(ctx, input.tenantId, ["Administrateur"]);
+      assertPublishableFieldValidation(input.fields);
       const fields = await materializeFormFields(input.tenantId, input.fields);
       if (input.steps?.length && validateFormSteps(fields, input.steps).length) throw new TRPCError({ code: "BAD_REQUEST", message: "La structure des étapes du formulaire est invalide." });
-      return createTenantForm({ ...input, fields });
+      const created = await createTenantForm({ tenantId: input.tenantId, projectId: input.projectId, name: input.name, fields, steps: input.steps, isPublished: true });
+      if (input.draftId) await deleteTenantFormDraft(input.tenantId, input.projectId, input.draftId);
+      return created;
     }),
   }),
   sync: router({

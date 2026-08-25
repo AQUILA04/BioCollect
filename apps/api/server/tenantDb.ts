@@ -1,7 +1,7 @@
 import { and, desc, eq, inArray } from "drizzle-orm";
 import { nanoid } from "nanoid";
-import { biometricAttachments, biometricConfigs, campaigns, formSchemas, projects, referenceDataSets, referenceDataSetVersions, selectionTypeNodes, selectionTypes, submissions, syncSessions, teamMembers, teams, tenantMemberships, tenants, users } from "../drizzle/schema";
-import type { BiometricAttachmentInput, CampaignStatus, FormField, FormStep, SelectionOption, SelectionTypeLevel, SelectionTypeNode, SyncSessionStatus, TeamMemberRole, TenantRole, UserRole } from "../shared/biocollect";
+import { biometricAttachments, biometricConfigs, campaigns, formBuilderSettings, formDrafts, formSchemas, projects, referenceDataSets, referenceDataSetVersions, selectionTypeNodes, selectionTypes, submissions, syncSessions, teamMembers, teams, tenantMemberships, tenants, users } from "../drizzle/schema";
+import type { BiometricAttachmentInput, CampaignStatus, FormField, FormStep, PhoneValidationDefaults, SelectionOption, SelectionTypeLevel, SelectionTypeNode, SyncSessionStatus, TeamMemberRole, TenantRole, UserRole } from "../shared/biocollect";
 import { getDb } from "./db";
 
 async function requireDb() {
@@ -152,6 +152,54 @@ export async function createTenantForm(input: { tenantId: string; projectId: str
   const version = (prior[0]?.version ?? 0) + 1;
   await db.insert(formSchemas).values({ id, projectId: input.projectId, name: input.name, fields: input.fields, steps: input.steps ?? null, isPublished: input.isPublished, version });
   return { id, version };
+}
+
+export async function listTenantFormDrafts(tenantId: string, projectId: string) {
+  if (!await getTenantProjectConfiguration(tenantId, projectId)) return [];
+  const db = await requireDb();
+  return db.select().from(formDrafts).where(and(eq(formDrafts.tenantId, tenantId), eq(formDrafts.projectId, projectId))).orderBy(desc(formDrafts.updatedAt));
+}
+
+export async function getTenantFormDraft(tenantId: string, projectId: string, draftId: string) {
+  const db = await requireDb();
+  return (await db.select().from(formDrafts).where(and(eq(formDrafts.id, draftId), eq(formDrafts.tenantId, tenantId), eq(formDrafts.projectId, projectId))).limit(1))[0] ?? null;
+}
+
+export async function saveTenantFormDraft(input: { tenantId: string; projectId: string; draftId?: string; name: string; fields: FormField[]; steps?: FormStep[]; userId: number }) {
+  if (!await getTenantProjectConfiguration(input.tenantId, input.projectId)) throw new Error("Projet introuvable dans cet espace.");
+  const db = await requireDb();
+  const values = { name: input.name, fields: input.fields, steps: input.steps ?? null, updatedBy: input.userId };
+  if (input.draftId) {
+    const existing = await getTenantFormDraft(input.tenantId, input.projectId, input.draftId);
+    if (!existing) return null;
+    await db.update(formDrafts).set(values).where(eq(formDrafts.id, input.draftId));
+    return getTenantFormDraft(input.tenantId, input.projectId, input.draftId);
+  }
+  const id = nanoid(20);
+  await db.insert(formDrafts).values({ id, tenantId: input.tenantId, projectId: input.projectId, ...values, createdBy: input.userId });
+  return getTenantFormDraft(input.tenantId, input.projectId, id);
+}
+
+export async function deleteTenantFormDraft(tenantId: string, projectId: string, draftId: string) {
+  const draft = await getTenantFormDraft(tenantId, projectId, draftId);
+  if (!draft) return false;
+  const db = await requireDb();
+  await db.delete(formDrafts).where(eq(formDrafts.id, draftId));
+  return true;
+}
+
+export async function getTenantPhoneValidationDefaults(tenantId: string): Promise<PhoneValidationDefaults> {
+  const db = await requireDb();
+  const settings = (await db.select().from(formBuilderSettings).where(eq(formBuilderSettings.tenantId, tenantId)).limit(1))[0];
+  return (settings?.phoneValidation as PhoneValidationDefaults | undefined) ?? {};
+}
+
+export async function updateTenantPhoneValidationDefaults(input: { tenantId: string; validation: PhoneValidationDefaults; userId: number }) {
+  const db = await requireDb();
+  const existing = (await db.select({ tenantId: formBuilderSettings.tenantId }).from(formBuilderSettings).where(eq(formBuilderSettings.tenantId, input.tenantId)).limit(1))[0];
+  if (existing) await db.update(formBuilderSettings).set({ phoneValidation: input.validation, updatedBy: input.userId }).where(eq(formBuilderSettings.tenantId, input.tenantId));
+  else await db.insert(formBuilderSettings).values({ tenantId: input.tenantId, phoneValidation: input.validation, updatedBy: input.userId });
+  return getTenantPhoneValidationDefaults(input.tenantId);
 }
 
 export async function getTenantSyncBundle(tenantId: string, projectId: string) {

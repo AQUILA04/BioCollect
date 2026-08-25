@@ -1,14 +1,15 @@
-import type { BioCollectFormStep, BioCollectSelectionOption } from "@biocollect/form-engine";
-import type { BioCollectHierarchicalSelectionDefinition } from "@biocollect/form-engine";
+import type { BioCollectFieldValidation, BioCollectFormStep, BioCollectHierarchicalSelectionDefinition, BioCollectSelectionOption } from "@biocollect/form-engine";
 
 export type BiometricStatus = "DRAFT" | "SYNCED" | "PROCESSING" | "VALIDATED" | "SUSPECTED_DUPLICATE" | "REJECTED";
-export type FieldType = "text" | "date" | "multiple choice" | "hierarchical selection" | "photo";
+export type FieldType = "text" | "email" | "phone" | "date" | "multiple choice" | "sex" | "hierarchical selection" | "photo";
 
 export type FormField = {
   id: string;
   label: string;
   type: FieldType;
   required: boolean;
+  validation?: BioCollectFieldValidation;
+  sexUseOther?: boolean;
   options?: Array<string | BioCollectSelectionOption>;
   referenceDataSetId?: string;
   selectionTypeId?: string;

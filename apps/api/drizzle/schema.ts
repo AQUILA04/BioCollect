@@ -120,6 +120,32 @@ export const formSchemas = mysqlTable("formSchemas", {
   uniqueIndex("form_schema_version_unique").on(table.projectId, table.version),
 ]);
 
+/** Persisted, editable work-in-progress forms. Drafts are never included in mobile synchronization. */
+export const formDrafts = mysqlTable("formDrafts", {
+  id: varchar("id", { length: 36 }).primaryKey(),
+  tenantId: varchar("tenantId", { length: 36 }).notNull(),
+  projectId: varchar("projectId", { length: 36 }).notNull(),
+  name: varchar("name", { length: 160 }).notNull(),
+  fields: json("fields").notNull(),
+  steps: json("steps"),
+  createdBy: int("createdBy").notNull(),
+  updatedBy: int("updatedBy").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+}, table => [
+  index("form_drafts_tenant_project_idx").on(table.tenantId, table.projectId),
+  index("form_drafts_project_updated_idx").on(table.projectId, table.updatedAt),
+]);
+
+/** Per-workspace defaults copied into every newly created Phone field. */
+export const formBuilderSettings = mysqlTable("formBuilderSettings", {
+  tenantId: varchar("tenantId", { length: 36 }).primaryKey(),
+  phoneValidation: json("phoneValidation").notNull(),
+  updatedBy: int("updatedBy").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
 export const biometricConfigs = mysqlTable("biometricConfigs", {
   id: varchar("id", { length: 36 }).primaryKey(),
   projectId: varchar("projectId", { length: 36 }).notNull(),

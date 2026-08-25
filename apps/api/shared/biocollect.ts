@@ -26,8 +26,32 @@ export type TeamMemberRole = (typeof TEAM_MEMBER_ROLES)[number];
 export const SYNC_SESSION_STATUSES = ["IN_PROGRESS", "COMPLETED", "FAILED"] as const;
 export type SyncSessionStatus = (typeof SYNC_SESSION_STATUSES)[number];
 
-export const FORM_FIELD_TYPES = ["text", "date", "multiple choice", "hierarchical selection", "photo"] as const;
+export const FORM_FIELD_TYPES = ["text", "email", "phone", "date", "multiple choice", "sex", "hierarchical selection", "photo"] as const;
 export type FormFieldType = (typeof FORM_FIELD_TYPES)[number];
+
+export const TEXT_VALIDATION_FORMATS = ["none", "alphabetic", "numeric", "alphanumeric", "regex"] as const;
+export type TextValidationFormat = (typeof TEXT_VALIDATION_FORMATS)[number];
+
+/**
+ * Validation carried in the published JSON schema and enforced on the mobile client.
+ * `maxLength` and date bounds are intentionally optional: an omitted maximum means unlimited.
+ */
+export type FieldValidation = {
+  minLength?: number;
+  maxLength?: number;
+  textFormat?: TextValidationFormat;
+  regex?: string;
+  allowedPrefixes?: string[];
+  minDate?: string;
+  maxDate?: string;
+};
+
+/** Defaults scoped to an entity and copied into each newly created Phone field. */
+export type PhoneValidationDefaults = {
+  minLength?: number;
+  maxLength?: number;
+  allowedPrefixes?: string[];
+};
 
 export type SelectionOption = {
   value: string;
@@ -61,6 +85,9 @@ export type FormField = {
   label: string;
   type: FormFieldType;
   required: boolean;
+  validation?: FieldValidation;
+  /** Special Sex fields always use the canonical values MALE/FEMALE and optionally OTHER. */
+  sexUseOther?: boolean;
   /** Legacy string arrays remain valid and are normalized at persistence or display time. */
   options?: LegacyOrSelectionOption[];
   referenceDataSetId?: string;
@@ -72,6 +99,18 @@ export type FormField = {
     operator: "equals" | "notEquals" | "isFilled";
     value?: string;
   };
+};
+
+export type FormBuilderDraft = {
+  id: string;
+  projectId: string;
+  name: string;
+  fields: FormField[];
+  steps?: FormStep[] | null;
+  createdBy: number;
+  updatedBy: number;
+  createdAt?: Date;
+  updatedAt?: Date;
 };
 
 export const FORM_STEP_KINDS = ["fields", "biometrics"] as const;
