@@ -186,11 +186,39 @@ if [ -n "${GHCR_USERNAME:-}" ] && [ -n "${GHCR_TOKEN:-}" ]; then
   echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USERNAME" --password-stdin
 fi
 
-docker compose \
-  -f "$COMPOSE_FILE" \
-  --project-name "$PROJECT_NAME" \
-  --env-file "$ENV_FILE" \
-  pull
+# Prefer IPv4 for outbound dual-stack (Contabo → GHCR IPv6 resets are common).
+# Idempotent; does not disable IPv6 or restart Docker (shared Traefik VPS).
+GAI=/etc/gai.conf
+if [[ -w "$GAI" ]] || [[ -w /etc ]]; then
+  if ! grep -qE '^precedence ::ffff:0:0/96[[:space:]]+100' "$GAI" 2>/dev/null; then
+    echo "precedence ::ffff:0:0/96  100" >> "$GAI"
+    echo "Preferred IPv4 via /etc/gai.conf (GHCR IPv6 resets on Contabo)"
+  fi
+fi
+
+PULL_MAX=5
+PULL_DELAY=5
+PULL_OK=false
+for attempt in $(seq 1 "$PULL_MAX"); do
+  echo "Pull attempt ${attempt}/${PULL_MAX}..."
+  if docker compose \
+    -f "$COMPOSE_FILE" \
+    --project-name "$PROJECT_NAME" \
+    --env-file "$ENV_FILE" \
+    pull; then
+    PULL_OK=true
+    break
+  fi
+  if [[ "$attempt" -lt "$PULL_MAX" ]]; then
+    echo "Pull failed (attempt ${attempt}/${PULL_MAX}); retrying in ${PULL_DELAY}s..."
+    sleep "$PULL_DELAY"
+    PULL_DELAY=$((PULL_DELAY * 2))
+  fi
+done
+if [[ "$PULL_OK" != "true" ]]; then
+  echo "ERROR: docker compose pull failed after ${PULL_MAX} attempts" >&2
+  exit 1
+fi
 
 echo "Starting services..."
 set +e
