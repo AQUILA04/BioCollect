@@ -11,6 +11,7 @@ const mobile = vi.hoisted(() => ({
 }));
 
 vi.mock("expo-router", () => ({ router: { back: vi.fn(), replace: vi.fn() }, useLocalSearchParams: () => ({ projectId: "project-1", formId: "form-1" }) }));
+vi.mock("expo-location", () => ({ PermissionStatus: { GRANTED: "granted" }, Accuracy: { High: 6 }, requestForegroundPermissionsAsync: vi.fn(async () => ({ status: "granted" })), getCurrentPositionAsync: vi.fn(async () => ({ timestamp: 1724580000000, coords: { latitude: 6.1319, longitude: 1.2228, accuracy: 4.5 } })) }));
 vi.mock("react-native", async () => {
   const react = await import("react");
   const host = (name: string) => ({ children, ...props }: any) => react.createElement(name, props, children);
@@ -117,6 +118,14 @@ describe("écran de collecte multi-étapes", () => {
     await act(async () => { await button(renderer.root, "Save record")?.props.onPress(); });
     const submitted = mobile.finalizeSubmission.mock.calls.at(-1)?.[0].data.geo;
     expect(JSON.parse(submitted).selections).toEqual({ region: "r-plateaux", prefecture: "p-ogat" });
+  });
+
+  it("récupère la position GPS, sauvegarde les coordonnées et rend la localisation obligatoire", async () => {
+    setup(); mobile.value.state.projects[0].forms = [{ id: "form-1", name: "GPS form", fields: [{ id: "gps", label: "Position", type: "gps", required: true }], steps: [{ id: "gps-step", label: "Position", order: 0, kind: "fields", fieldIds: ["gps"] }] }];
+    let renderer!: TestRenderer.ReactTestRenderer; await act(async () => { renderer = TestRenderer.create(<CollectScreen />); });
+    expect(button(renderer.root, "forms.getLocation")?.props.disabled).toBeFalsy();
+    await act(async () => { await button(renderer.root, "forms.getLocation")?.props.onPress(); });
+    const savedGps = mobile.saveDraft.mock.calls.at(-1)?.[0].data.gps; expect(JSON.parse(savedGps)).toMatchObject({ latitude: 6.1319, longitude: 1.2228, mapsUrl: "https://www.google.com/maps?q=6.1319,1.2228" }); expect(button(renderer.root, "forms.refreshLocation")).toBeDefined(); expect(button(renderer.root, "Save record")?.props.disabled).toBe(false);
   });
 
   it("affiche une recherche pour une grande liste, filtre les résultats et indique l’absence de résultat", async () => {

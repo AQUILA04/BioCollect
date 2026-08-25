@@ -7,7 +7,7 @@
     "userInterfaceStyle": "light",
     "scheme": "biocollect",
     "extra": { "biocollectApiUrl": "" },
-    "plugins": ["expo-router"],
+    "plugins": ["expo-router", ["expo-location", { "locationWhenInUsePermission": "BioCollect utilise votre position pour enregistrer le lieu du dossier." }]],
     "experiments": { "typedRoutes": true }
   }
 }

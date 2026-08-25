@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { parseGpsValue, serializeGpsValue } from "@biocollect/form-engine";
 import { adjacentStep, canQueueSubmission, isStepValid } from "./step-workflow";
 
 const steps = [
@@ -30,6 +31,12 @@ describe("workflow de collecte par étapes", () => {
     expect(isStepValid({ step: steps[2], fields, answers: { name: "Awa", income: "12" }, requiredFingers: ["RIGHT_THUMB"], capturedFingers: new Set() })).toBe(false);
     expect(canQueueSubmission(steps, "bio", false)).toBe(false);
     expect(canQueueSubmission(steps, "bio", true)).toBe(true);
+  });
+
+  it("sérialise une position GPS en coordonnées et lien cartographique", () => {
+    const serialized = serializeGpsValue({ latitude: 6.1319, longitude: 1.2228, capturedAt: "2026-08-25T10:00:00.000Z" });
+    expect(parseGpsValue(serialized)).toMatchObject({ latitude: 6.1319, longitude: 1.2228, mapsUrl: "https://www.google.com/maps?q=6.1319,1.2228" });
+    expect(parseGpsValue(JSON.stringify({ latitude: 91, longitude: 1, capturedAt: "now", mapsUrl: "invalid" }))).toBeNull();
   });
 
   it("refuse OTHER lorsqu’un champ Sexe est configuré pour ne gérer que deux valeurs", () => {

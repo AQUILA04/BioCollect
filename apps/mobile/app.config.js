@@ -8,7 +8,7 @@ module.exports = {
     orientation: "portrait",
     userInterfaceStyle: "light",
     scheme: "biocollect",
-    plugins: ["expo-router"],
+    plugins: ["expo-router", ["expo-location", { locationWhenInUsePermission: "BioCollect utilise votre position pour enregistrer le lieu du dossier." }]],
     experiments: { typedRoutes: true },
     extra: { biocollectApiUrl: apiUrl },
   },

@@ -26,7 +26,7 @@ export type TeamMemberRole = (typeof TEAM_MEMBER_ROLES)[number];
 export const SYNC_SESSION_STATUSES = ["IN_PROGRESS", "COMPLETED", "FAILED"] as const;
 export type SyncSessionStatus = (typeof SYNC_SESSION_STATUSES)[number];
 
-export const FORM_FIELD_TYPES = ["text", "email", "phone", "date", "multiple choice", "sex", "hierarchical selection", "photo"] as const;
+export const FORM_FIELD_TYPES = ["text", "email", "phone", "date", "multiple choice", "sex", "gps", "hierarchical selection", "photo"] as const;
 export type FormFieldType = (typeof FORM_FIELD_TYPES)[number];
 
 export const TEXT_VALIDATION_FORMATS = ["none", "alphabetic", "numeric", "alphanumeric", "regex"] as const;

@@ -1,7 +1,8 @@
 import { router, useLocalSearchParams } from "expo-router";
-import { Alert, Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import { Alert, Linking, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import React, { useEffect, useMemo, useState } from "react";
-import { fieldsForStep, normalizeFormSteps, validateFieldValue } from "@biocollect/form-engine";
+import { fieldsForStep, normalizeFormSteps, parseGpsValue, serializeGpsValue, validateFieldValue } from "@biocollect/form-engine";
+import * as Location from "expo-location";
 import type { BiometricAttachment, FormField } from "../src/domain";
 import { useI18n } from "../src/i18n-context";
 import { useMobile } from "../src/mobile-context";
@@ -10,9 +11,35 @@ import { changeHierarchyAnswer, optionsForHierarchyLevel, parseHierarchicalAnswe
 import { normalizeSelectionOption, searchChoiceItems, searchSelectionOptions, shouldUseSelectionSearch } from "../src/selection-search";
 import { Card, Kicker, PrimaryButton, Screen, SecondaryButton, styles } from "../src/ui";
 
+function GpsFieldInput({ field, value, onChange }: { field: FormField; value: string; onChange: (value: string) => void }) {
+  const { t } = useI18n();
+  const [isLocating, setIsLocating] = useState(false);
+  const gps = parseGpsValue(value);
+
+  async function captureLocation() {
+    setIsLocating(true);
+    try {
+      const permission = await Location.requestForegroundPermissionsAsync();
+      if (permission.status !== Location.PermissionStatus.GRANTED) {
+        Alert.alert(t("forms.locationPermission"), t("forms.locationPermissionDescription"));
+        return;
+      }
+      const position = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
+      onChange(serializeGpsValue({ latitude: position.coords.latitude, longitude: position.coords.longitude, accuracy: position.coords.accuracy ?? undefined, capturedAt: new Date(position.timestamp || Date.now()).toISOString() }));
+    } catch {
+      Alert.alert(t("mobile.locationError"), t("forms.locationUnavailable"));
+    } finally {
+      setIsLocating(false);
+    }
+  }
+
+  return <View style={{ gap: 8 }}><Text style={styles.label}>{field.label}{field.required ? " *" : ""}</Text><SecondaryButton label={isLocating ? t("forms.locating") : gps ? t("forms.refreshLocation") : t("forms.getLocation")} onPress={() => void captureLocation()} />{gps ? <View style={{ gap: 4, paddingTop: 4 }}><Text style={styles.statusText}>{t("forms.locationCaptured")}</Text><Text style={styles.body}>{t("forms.latitude")}: {gps.latitude.toFixed(6)} · {t("forms.longitude")}: {gps.longitude.toFixed(6)}</Text>{gps.accuracy !== undefined ? <Text style={styles.body}>{t("forms.accuracy")}: {gps.accuracy.toFixed(1)} m</Text> : null}<Pressable accessibilityRole="link" onPress={() => void Linking.openURL(gps.mapsUrl)}><Text style={[styles.optionText, { color: "#137A9A", fontWeight: "700" }]}>{t("forms.openMap")}</Text></Pressable></View> : null}</View>;
+}
+
 function FieldInput({ field, value, onChange, attachment, onAttach }: { field: FormField; value: string; onChange: (value: string) => void; attachment?: BiometricAttachment; onAttach: () => void }) {
   const { t } = useI18n();
   const [selectionQuery, setSelectionQuery] = useState(""); const [hierarchyQueries, setHierarchyQueries] = useState<Record<string, string>>({});
+  if (field.type === "gps") return <GpsFieldInput field={field} value={value} onChange={onChange} />;
   if (field.type === "sex") { const options = [{ value: "MALE", label: t("forms.male") }, { value: "FEMALE", label: t("forms.female") }, ...(field.sexUseOther === false ? [] : [{ value: "OTHER", label: t("forms.other") }])]; return <View style={{ gap: 8 }}><Text style={styles.label}>{field.label}{field.required ? " *" : ""}</Text><View style={{ gap: 8 }}>{options.map(option => <Pressable key={option.value} accessibilityRole="radio" accessibilityState={{ checked: value === option.value }} onPress={() => onChange(option.value)} style={[styles.option, value === option.value && styles.optionSelected]}><Text style={styles.optionText}>{option.label}</Text></Pressable>)}</View></View>; }
   if (field.type === "multiple choice") { const options = (field.options ?? []).map(normalizeSelectionOption); const searchable = shouldUseSelectionSearch(options); const visibleOptions = searchable ? searchSelectionOptions(options, selectionQuery) : options; return <View style={{ gap: 8 }}><Text style={styles.label}>{field.label}{field.required ? " *" : ""}</Text>{searchable ? <><TextInput accessibilityLabel={t("mobile.searchOptions")} value={selectionQuery} onChangeText={setSelectionQuery} placeholder={t("mobile.searchOptions")} placeholderTextColor="#60758A" style={styles.input} /><Text style={styles.statusText}>{t("mobile.searchResults", { count: visibleOptions.length })}</Text></> : null}<View style={{ gap: 8 }}>{visibleOptions.map(option => <Pressable key={option.value} accessibilityRole="radio" accessibilityState={{ checked: value === option.value }} onPress={() => onChange(option.value)} style={[styles.option, value === option.value && styles.optionSelected]}><Text style={styles.optionText}>{option.label}</Text></Pressable>)}</View></View>; }
   if (field.type === "hierarchical selection" && field.hierarchicalDefinition) { const definition = field.hierarchicalDefinition; const answer = parseHierarchicalAnswer(value); const levels = [...definition.levels].sort((left, right) => left.order - right.order); return <View style={{ gap: 14 }}><Text style={styles.label}>{field.label}{field.required ? " *" : ""}</Text>{levels.map((level, index) => { const parentId = index ? answer?.selections[levels[index - 1].id] : undefined; const enabled = index === 0 || Boolean(parentId); const options = enabled ? optionsForHierarchyLevel(definition, level.id, parentId) : []; const selected = answer?.selections[level.id]; const query = hierarchyQueries[level.id] ?? ""; const searchable = shouldUseSelectionSearch(options); const visibleOptions = searchable ? searchChoiceItems(options, query) : options; return <View key={level.id} style={{ gap: 8, opacity: enabled ? 1 : 0.55 }}><Text style={styles.statusText}>{level.label}</Text>{enabled ? options.length ? <View style={{ gap: 8 }}>{searchable ? <><TextInput accessibilityLabel={`${t("mobile.searchOptions")} ${level.label}`} value={query} onChangeText={next => setHierarchyQueries(current => ({ ...current, [level.id]: next }))} placeholder={t("mobile.searchOptions")} placeholderTextColor="#60758A" style={styles.input} /><Text style={styles.statusText}>{t("mobile.searchResults", { count: visibleOptions.length })}</Text></> : null}{visibleOptions.map(option => <Pressable key={option.id} accessibilityRole="radio" accessibilityState={{ checked: selected === option.id }} onPress={() => { setHierarchyQueries(current => { const next = { ...current }; levels.slice(index + 1).forEach(descendant => { delete next[descendant.id]; }); return next; }); onChange(JSON.stringify(changeHierarchyAnswer(definition, answer, level.id, option.id))); }} style={[styles.option, selected === option.id && styles.optionSelected]}><Text style={styles.optionText}>{option.label}</Text></Pressable>)}</View> : <Text style={styles.body}>—</Text> : <Text style={styles.body}>—</Text>}</View>; })}</View>; }

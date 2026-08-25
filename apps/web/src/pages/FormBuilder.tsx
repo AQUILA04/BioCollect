@@ -9,7 +9,7 @@ import { useTenant } from "@/contexts/TenantContext";
 import { trpc } from "@/lib/trpc";
 import { fieldsForStep, validateFormSteps } from "@biocollect/form-engine";
 import type { TranslationKey } from "@biocollect/i18n";
-import { AtSign, CalendarDays, CheckSquare2, ChevronDown, ChevronUp, CircleUserRound, Database, Fingerprint, GitBranch, GripVertical, Image, Layers3, Loader2, Phone, Plus, Type } from "lucide-react";
+import { AtSign, CalendarDays, CheckSquare2, ChevronDown, ChevronUp, CircleUserRound, Database, Fingerprint, GitBranch, GripVertical, Image, Layers3, Loader2, MapPin, Phone, Plus, Type } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import type { FieldValidation, FormField, FormFieldType, FormStep, PhoneValidationDefaults, SelectionOption, TextValidationFormat } from "../../../api/shared/biocollect";
@@ -21,6 +21,7 @@ const fieldOptions = (t: (key: TranslationKey) => string): { type: FormFieldType
   { type: "email", label: t("forms.email"), icon: AtSign },
   { type: "phone", label: t("forms.phone"), icon: Phone },
   { type: "sex", label: t("forms.sex"), icon: CircleUserRound },
+  { type: "gps", label: t("forms.gps"), icon: MapPin },
   { type: "date", label: t("forms.date"), icon: CalendarDays },
   { type: "multiple choice", label: t("forms.multipleChoice"), icon: CheckSquare2 },
   { type: "photo", label: t("forms.photo"), icon: Image },
@@ -38,7 +39,7 @@ const newField = (type: FormFieldType, t: (key: TranslationKey, values?: Record<
 });
 const newStep = (label: string): FormStep => ({ id: makeId("step"), label, order: 0, kind: "fields", fieldIds: [] });
 const optionText = (options: FormField["options"]) => (options ?? []).map(option => typeof option === "string" ? option : `${option.value} | ${option.label}`).join("\n");
-const fieldTypeLabel = (t: (key: TranslationKey) => string, type: FormFieldType) => t(({ text: "forms.text", email: "forms.email", phone: "forms.phone", sex: "forms.sex", date: "forms.date", "multiple choice": "forms.multipleChoice", "hierarchical selection": "forms.hierarchicalSelection", photo: "forms.photo" } as const)[type]);
+const fieldTypeLabel = (t: (key: TranslationKey) => string, type: FormFieldType) => t(({ text: "forms.text", email: "forms.email", phone: "forms.phone", sex: "forms.sex", gps: "forms.gps", date: "forms.date", "multiple choice": "forms.multipleChoice", "hierarchical selection": "forms.hierarchicalSelection", photo: "forms.photo" } as const)[type]);
 const sexOptions = (t: (key: TranslationKey) => string, useOther = true): SelectionOption[] => [{ value: "MALE", label: t("forms.male") }, { value: "FEMALE", label: t("forms.female") }, ...(useOther ? [{ value: "OTHER", label: t("forms.other") }] : [])];
 const parseOptions = (value: string): SelectionOption[] => {
   const known = new Set<string>();

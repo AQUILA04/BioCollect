@@ -8,6 +8,7 @@ import { OfflineStore, type KeyValueStore } from "../src/offline-store";
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 vi.mock("expo-router", () => ({ router: { back: vi.fn(), replace: vi.fn() }, useLocalSearchParams: () => ({ projectId: "project-1", formId: "form-1" }) }));
+vi.mock("expo-location", () => ({ PermissionStatus: { GRANTED: "granted" }, Accuracy: { High: 6 }, requestForegroundPermissionsAsync: vi.fn(async () => ({ status: "granted" })), getCurrentPositionAsync: vi.fn(async () => ({ timestamp: 1724580000000, coords: { latitude: 6.1319, longitude: 1.2228, accuracy: 4.5 } })) }));
 vi.mock("expo-constants", () => ({ default: { expoConfig: { extra: {} } } }));
 vi.mock("@react-native-async-storage/async-storage", () => ({ default: { getItem: vi.fn(), setItem: vi.fn() } }));
 vi.mock("react-native", async () => {

@@ -20,6 +20,7 @@
     "expo": "~54.0.29",
     "expo-constants": "~18.0.12",
     "expo-linking": "~8.0.12",
+    "expo-location": "~19.0.8",
     "expo-router": "~6.0.19",
     "expo-status-bar": "~3.0.9",
     "react": "19.1.0",

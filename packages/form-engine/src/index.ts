@@ -6,6 +6,14 @@ export type FieldCondition = {
 
 export type TextValidationFormat = "none" | "alphabetic" | "numeric" | "alphanumeric" | "regex";
 
+export type BioCollectGpsValue = {
+  latitude: number;
+  longitude: number;
+  accuracy?: number;
+  capturedAt: string;
+  mapsUrl: string;
+};
+
 export type BioCollectFieldValidation = {
   minLength?: number;
   maxLength?: number;
@@ -28,7 +36,7 @@ export type BioCollectHierarchicalSelectionDefinition = { selectionTypeId: strin
 export type BioCollectFormField = {
   id: string;
   label: string;
-  type: "text" | "email" | "phone" | "date" | "multiple choice" | "sex" | "hierarchical selection" | "photo";
+  type: "text" | "email" | "phone" | "date" | "multiple choice" | "sex" | "gps" | "hierarchical selection" | "photo";
   required: boolean;
   validation?: BioCollectFieldValidation;
   sexUseOther?: boolean;
@@ -51,12 +59,31 @@ export type FieldValidationIssue =
   | "date"
   | "minDate"
   | "maxDate"
-  | "choice";
+  | "choice"
+  | "gps";
 
 export type FieldValidationResult = { valid: true } | { valid: false; issue: FieldValidationIssue };
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+
+export function parseGpsValue(value: unknown): BioCollectGpsValue | null {
+  if (typeof value !== "string" || !value.trim()) return null;
+  try {
+    const parsed = JSON.parse(value) as Partial<BioCollectGpsValue>;
+    if (typeof parsed.latitude !== "number" || !Number.isFinite(parsed.latitude) || parsed.latitude < -90 || parsed.latitude > 90) return null;
+    if (typeof parsed.longitude !== "number" || !Number.isFinite(parsed.longitude) || parsed.longitude < -180 || parsed.longitude > 180) return null;
+    if (typeof parsed.capturedAt !== "string" || typeof parsed.mapsUrl !== "string") return null;
+    return { latitude: parsed.latitude, longitude: parsed.longitude, accuracy: typeof parsed.accuracy === "number" && Number.isFinite(parsed.accuracy) ? parsed.accuracy : undefined, capturedAt: parsed.capturedAt, mapsUrl: parsed.mapsUrl };
+  } catch {
+    return null;
+  }
+}
+
+export function serializeGpsValue(value: Omit<BioCollectGpsValue, "mapsUrl"> & { mapsUrl?: string }) {
+  const mapsUrl = value.mapsUrl ?? `https://www.google.com/maps?q=${value.latitude},${value.longitude}`;
+  return JSON.stringify({ ...value, mapsUrl });
+}
 
 function isEmpty(value: unknown) {
   return value === undefined || value === null || (typeof value === "string" && value.trim() === "");
@@ -90,6 +117,7 @@ export function validateFieldValue(field: BioCollectFormField, value: unknown, o
 
   if (field.type === "multiple choice" && !normalizedOptions(field.options).includes(text)) return { valid: false, issue: "choice" };
   if (field.type === "sex" && !["MALE", "FEMALE", ...(field.sexUseOther === false ? [] : ["OTHER"])].includes(text)) return { valid: false, issue: "choice" };
+  if (field.type === "gps") return parseGpsValue(text) ? { valid: true } : { valid: false, issue: "gps" };
   if (field.type === "date") {
     if (!validation?.minDate && !validation?.maxDate) return { valid: true };
     if (!isIsoDate(text)) return { valid: false, issue: "date" };
