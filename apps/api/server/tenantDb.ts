@@ -252,6 +252,145 @@ export async function listTenantInvestigators(tenantId: string) {
     .orderBy(users.name);
 }
 
+export async function listTenantMembers(tenantId: string) {
+  const db = await requireDb();
+  return db
+    .select({
+      membershipId: tenantMemberships.id,
+      userId: users.id,
+      openId: users.openId,
+      name: users.name,
+      email: users.email,
+      role: tenantMemberships.role,
+      createdAt: tenantMemberships.createdAt,
+    })
+    .from(tenantMemberships)
+    .innerJoin(users, eq(tenantMemberships.userId, users.id))
+    .where(eq(tenantMemberships.tenantId, tenantId))
+    .orderBy(users.name);
+}
+
+export async function addTenantMember(input: {
+  tenantId: string;
+  userId: number;
+  role: TenantRole;
+}) {
+  const db = await requireDb();
+  const existing = await db
+    .select()
+    .from(tenantMemberships)
+    .where(
+      and(
+        eq(tenantMemberships.tenantId, input.tenantId),
+        eq(tenantMemberships.userId, input.userId)
+      )
+    )
+    .limit(1);
+  if (existing[0]) {
+    await db
+      .update(tenantMemberships)
+      .set({ role: input.role })
+      .where(eq(tenantMemberships.id, existing[0].id));
+    return existing[0].id;
+  }
+  const id = nanoid(20);
+  await db.insert(tenantMemberships).values({
+    id,
+    tenantId: input.tenantId,
+    userId: input.userId,
+    role: input.role,
+  });
+  return id;
+}
+
+export async function updateTenantMemberRole(input: {
+  tenantId: string;
+  userId: number;
+  role: TenantRole;
+}) {
+  const db = await requireDb();
+  const rows = await db
+    .update(tenantMemberships)
+    .set({ role: input.role })
+    .where(
+      and(
+        eq(tenantMemberships.tenantId, input.tenantId),
+        eq(tenantMemberships.userId, input.userId)
+      )
+    );
+  return rows;
+}
+
+export async function countTenantAdmins(tenantId: string) {
+  const db = await requireDb();
+  const admins = await db
+    .select({ id: tenantMemberships.id })
+    .from(tenantMemberships)
+    .where(
+      and(
+        eq(tenantMemberships.tenantId, tenantId),
+        eq(tenantMemberships.role, "Administrateur")
+      )
+    );
+  return admins.length;
+}
+
+export async function removeTenantMember(input: {
+  tenantId: string;
+  userId: number;
+  actorUserId: number;
+}) {
+  const db = await requireDb();
+  const membership = await db
+    .select()
+    .from(tenantMemberships)
+    .where(
+      and(
+        eq(tenantMemberships.tenantId, input.tenantId),
+        eq(tenantMemberships.userId, input.userId)
+      )
+    )
+    .limit(1);
+  if (!membership[0]) return false;
+
+  if (membership[0].role === "Administrateur") {
+    const adminCount = await countTenantAdmins(input.tenantId);
+    if (adminCount <= 1) {
+      throw new Error(
+        "Impossible de retirer le dernier administrateur de cet espace."
+      );
+    }
+  }
+
+  await db
+    .delete(tenantMemberships)
+    .where(eq(tenantMemberships.id, membership[0].id));
+  return true;
+}
+
+export async function getTenantMember(tenantId: string, userId: number) {
+  const db = await requireDb();
+  const rows = await db
+    .select({
+      membershipId: tenantMemberships.id,
+      userId: users.id,
+      openId: users.openId,
+      name: users.name,
+      email: users.email,
+      role: tenantMemberships.role,
+    })
+    .from(tenantMemberships)
+    .innerJoin(users, eq(tenantMemberships.userId, users.id))
+    .where(
+      and(
+        eq(tenantMemberships.tenantId, tenantId),
+        eq(tenantMemberships.userId, userId)
+      )
+    )
+    .limit(1);
+  return rows[0] ?? null;
+}
+
 export async function getTenantCampaign(tenantId: string, campaignId: string) {
   const db = await requireDb();
   const result = await db.select({ campaign: campaigns, project: projects })

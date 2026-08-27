@@ -116,6 +116,18 @@ jobs:
           JWT_SECRET: ${{ secrets.JWT_SECRET }}
           OIDC_ISSUER_URI: ${{ secrets.OIDC_ISSUER_URI }}
           OIDC_CLIENT_ID: ${{ secrets.OIDC_CLIENT_ID }}
+          OWNER_EMAIL: ${{ secrets.OWNER_EMAIL }}
+          OWNER_OPEN_ID: ${{ secrets.OWNER_OPEN_ID }}
+          KEYCLOAK_URL: ${{ secrets.KEYCLOAK_URL }}
+          KEYCLOAK_ADMIN: ${{ secrets.KEYCLOAK_ADMIN }}
+          KEYCLOAK_ADMIN_PASSWORD: ${{ secrets.KEYCLOAK_ADMIN_PASSWORD }}
+          KEYCLOAK_ACTIONS_CLIENT_ID: ${{ secrets.KEYCLOAK_ACTIONS_CLIENT_ID }}
+          APP_PUBLIC_URL: ${{ secrets.APP_PUBLIC_URL }}
+          NOTIFICATION_HUB_BASE_URL: ${{ secrets.NOTIFICATION_HUB_BASE_URL }}
+          NOTIFICATION_HUB_FROM: ${{ secrets.NOTIFICATION_HUB_FROM }}
+          NOTIFICATION_HUB_OAUTH_TOKEN_URL: ${{ secrets.NOTIFICATION_HUB_OAUTH_TOKEN_URL }}
+          NOTIFICATION_HUB_OAUTH_CLIENT_ID: ${{ secrets.NOTIFICATION_HUB_OAUTH_CLIENT_ID }}
+          NOTIFICATION_HUB_OAUTH_CLIENT_SECRET: ${{ secrets.NOTIFICATION_HUB_OAUTH_CLIENT_SECRET }}
           GITHUB_REPOSITORY: ${{ github.repository }}
         run: |
           set -euo pipefail
@@ -144,6 +156,18 @@ jobs:
             --jwt-secret "$JWT_SECRET"
             --oidc-issuer-uri "$OIDC_ISSUER_URI"
             --oidc-client-id "${OIDC_CLIENT_ID:-biocollect-web}"
+            --owner-email "${OWNER_EMAIL:-francis.ahonsou@gmail.com}"
+            --owner-open-id "${OWNER_OPEN_ID:-}"
+            --keycloak-url "${KEYCLOAK_URL:-https://auth.optimizesolux.com}"
+            --keycloak-admin "${KEYCLOAK_ADMIN:-}"
+            --keycloak-admin-password "${KEYCLOAK_ADMIN_PASSWORD:-}"
+            --keycloak-actions-client-id "${KEYCLOAK_ACTIONS_CLIENT_ID:-biocollect-web}"
+            --app-public-url "${APP_PUBLIC_URL:-https://biocollect.optimizesolux.com}"
+            --notification-hub-base-url "${NOTIFICATION_HUB_BASE_URL:-https://notification-api.optimizesolux.com}"
+            --notification-hub-from "${NOTIFICATION_HUB_FROM:-notifications@optimizesolux.com}"
+            --notification-hub-oauth-token-url "${NOTIFICATION_HUB_OAUTH_TOKEN_URL:-https://auth.optimizesolux.com/realms/notification-hub/protocol/openid-connect/token}"
+            --notification-hub-oauth-client-id "${NOTIFICATION_HUB_OAUTH_CLIENT_ID:-biocollect-notification-sender}"
+            --notification-hub-oauth-client-secret "${NOTIFICATION_HUB_OAUTH_CLIENT_SECRET:-}"
             --redis-database "7"
             --github-repo "$GITHUB_REPOSITORY"
           )
@@ -183,6 +207,18 @@ jobs:
           JWT_SECRET: ${{ secrets.JWT_SECRET }}
           OIDC_ISSUER_URI: ${{ secrets.OIDC_ISSUER_URI }}
           OIDC_CLIENT_ID: ${{ secrets.OIDC_CLIENT_ID }}
+          OWNER_EMAIL: ${{ secrets.OWNER_EMAIL }}
+          OWNER_OPEN_ID: ${{ secrets.OWNER_OPEN_ID }}
+          KEYCLOAK_URL: ${{ secrets.KEYCLOAK_URL }}
+          KEYCLOAK_ADMIN: ${{ secrets.KEYCLOAK_ADMIN }}
+          KEYCLOAK_ADMIN_PASSWORD: ${{ secrets.KEYCLOAK_ADMIN_PASSWORD }}
+          KEYCLOAK_ACTIONS_CLIENT_ID: ${{ secrets.KEYCLOAK_ACTIONS_CLIENT_ID }}
+          APP_PUBLIC_URL: ${{ secrets.APP_PUBLIC_URL }}
+          NOTIFICATION_HUB_BASE_URL: ${{ secrets.NOTIFICATION_HUB_BASE_URL }}
+          NOTIFICATION_HUB_FROM: ${{ secrets.NOTIFICATION_HUB_FROM }}
+          NOTIFICATION_HUB_OAUTH_TOKEN_URL: ${{ secrets.NOTIFICATION_HUB_OAUTH_TOKEN_URL }}
+          NOTIFICATION_HUB_OAUTH_CLIENT_ID: ${{ secrets.NOTIFICATION_HUB_OAUTH_CLIENT_ID }}
+          NOTIFICATION_HUB_OAUTH_CLIENT_SECRET: ${{ secrets.NOTIFICATION_HUB_OAUTH_CLIENT_SECRET }}
           GITHUB_REPOSITORY: ${{ github.repository }}
         run: |
           set -euo pipefail
@@ -211,6 +247,18 @@ jobs:
             --jwt-secret "$JWT_SECRET"
             --oidc-issuer-uri "$OIDC_ISSUER_URI"
             --oidc-client-id "${OIDC_CLIENT_ID:-biocollect-web}"
+            --owner-email "${OWNER_EMAIL:-francis.ahonsou@gmail.com}"
+            --owner-open-id "${OWNER_OPEN_ID:-}"
+            --keycloak-url "${KEYCLOAK_URL:-https://auth.optimizesolux.com}"
+            --keycloak-admin "${KEYCLOAK_ADMIN:-}"
+            --keycloak-admin-password "${KEYCLOAK_ADMIN_PASSWORD:-}"
+            --keycloak-actions-client-id "${KEYCLOAK_ACTIONS_CLIENT_ID:-biocollect-web}"
+            --app-public-url "${APP_PUBLIC_URL:-https://biocollect.optimizesolux.com}"
+            --notification-hub-base-url "${NOTIFICATION_HUB_BASE_URL:-https://notification-api.optimizesolux.com}"
+            --notification-hub-from "${NOTIFICATION_HUB_FROM:-notifications@optimizesolux.com}"
+            --notification-hub-oauth-token-url "${NOTIFICATION_HUB_OAUTH_TOKEN_URL:-https://auth.optimizesolux.com/realms/notification-hub/protocol/openid-connect/token}"
+            --notification-hub-oauth-client-id "${NOTIFICATION_HUB_OAUTH_CLIENT_ID:-biocollect-notification-sender}"
+            --notification-hub-oauth-client-secret "${NOTIFICATION_HUB_OAUTH_CLIENT_SECRET:-}"
             --redis-database "7"
             --github-repo "$GITHUB_REPOSITORY"
           )

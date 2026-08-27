@@ -75,6 +75,11 @@ services:
       OIDC_CLIENT_ID: ${OIDC_CLIENT_ID:-biocollect-web}
       # Browser reaches Keycloak on host port; issuer for redirects must be public URL
       OIDC_PUBLIC_ISSUER_URI: ${OIDC_PUBLIC_ISSUER_URI:-http://localhost:8180/realms/biocollect}
+      KEYCLOAK_URL: ${KEYCLOAK_URL:-http://keycloak:8180}
+      KEYCLOAK_ADMIN: ${KEYCLOAK_ADMIN:-admin}
+      KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-admin}
+      KEYCLOAK_ACTIONS_CLIENT_ID: ${KEYCLOAK_ACTIONS_CLIENT_ID:-biocollect-web}
+      APP_PUBLIC_URL: ${APP_PUBLIC_URL:-http://localhost:3000}
 
 volumes:
   biocollect_mysql_data:

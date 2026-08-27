@@ -1,4 +1,4 @@
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
 import { nanoid } from "nanoid";
 import {
@@ -34,6 +34,43 @@ async function requireDb() {
   return db;
 }
 
+function isOwnerUser(user: { openId?: string | null; email?: string | null }): boolean {
+  if (ENV.ownerOpenId && user.openId === ENV.ownerOpenId) return true;
+  const email = user.email?.trim().toLowerCase();
+  return Boolean(ENV.ownerEmail && email && email === ENV.ownerEmail);
+}
+
+/**
+ * Idempotent: promote any matching owner email to Superadmin.
+ * No-op when DB is unavailable or no matching row exists yet.
+ */
+export async function ensureSuperadminByEmail(
+  email: string = ENV.ownerEmail
+): Promise<number> {
+  const normalized = email.trim().toLowerCase();
+  if (!normalized) return 0;
+  const db = await getDb();
+  if (!db) return 0;
+
+  const matched = await db
+    .select({ id: users.id, role: users.role, email: users.email })
+    .from(users)
+    .where(sql`LOWER(${users.email}) = ${normalized}`);
+
+  let promoted = 0;
+  for (const row of matched) {
+    if (row.role === "Superadmin") continue;
+    await db.update(users).set({ role: "Superadmin" }).where(eq(users.id, row.id));
+    promoted += 1;
+  }
+  if (promoted > 0) {
+    console.log(
+      `[Bootstrap] Promoted ${promoted} user(s) to Superadmin for ${normalized}`
+    );
+  }
+  return promoted;
+}
+
 export async function upsertUser(user: InsertUser): Promise<void> {
   if (!user.openId) throw new Error("User openId is required for upsert");
   const db = await getDb();
@@ -52,8 +89,23 @@ export async function upsertUser(user: InsertUser): Promise<void> {
     values.lastSignedIn = user.lastSignedIn;
     updateSet.lastSignedIn = user.lastSignedIn;
   }
-  values.role = user.role ?? (user.openId === ENV.ownerOpenId ? "Administrateur" : "Enquêteur");
-  updateSet.role = values.role;
+
+  const owner = isOwnerUser({
+    openId: user.openId,
+    email: typeof user.email === "string" ? user.email : undefined,
+  });
+
+  if (user.role) {
+    values.role = user.role;
+    updateSet.role = user.role;
+  } else if (owner) {
+    values.role = "Superadmin";
+    updateSet.role = "Superadmin";
+  } else {
+    // Insert default only — do not demote existing Superadmin on lastSignedIn refresh.
+    values.role = "Enquêteur";
+  }
+
   if (!values.lastSignedIn) values.lastSignedIn = new Date();
   if (Object.keys(updateSet).length === 0) updateSet.lastSignedIn = new Date();
 
@@ -65,11 +117,26 @@ export async function getUserByOpenId(openId: string) {
   if (!db) return undefined;
   const result = await db.select().from(users).where(eq(users.openId, openId)).limit(1);
   const user = result[0];
-  if (user && user.openId === ENV.ownerOpenId && user.role !== "Superadmin") {
+  if (!user) return undefined;
+
+  if (isOwnerUser(user) && user.role !== "Superadmin") {
     await db.update(users).set({ role: "Superadmin" }).where(eq(users.id, user.id));
     return { ...user, role: "Superadmin" as const };
   }
   return user;
+}
+
+export async function getUserByEmail(email: string) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const normalized = email.trim().toLowerCase();
+  if (!normalized) return undefined;
+  const result = await db
+    .select()
+    .from(users)
+    .where(sql`LOWER(${users.email}) = ${normalized}`)
+    .limit(1);
+  return result[0];
 }
 
 export async function listProjects() {

@@ -8,6 +8,7 @@ import FormBuilder from "./pages/FormBuilder";
 import FieldOperations from "./pages/FieldOperations";
 import Home from "./pages/Home";
 import Landing from "./pages/Landing";
+import Members from "./pages/Members";
 import NotFound from "./pages/NotFound";
 import Projects from "./pages/Projects";
 import ReferenceData from "./pages/ReferenceData";
@@ -26,6 +27,7 @@ function Router() {
       <Route path="/field-operations" component={FieldOperations} />
       <Route path="/reference-data" component={ReferenceData} />
       <Route path="/selection-types" component={SelectionTypes} />
+      <Route path="/members" component={Members} />
       <Route path="/conflicts" component={Conflicts} />
       <Route path="/404" component={NotFound} />
       <Route component={NotFound} />

@@ -1,15 +1,16 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
-import { createSyncedSubmission, resolveConflict } from "../db";
+import { createSyncedSubmission, getUserByEmail, getUserByOpenId, resolveConflict, upsertUser } from "../db";
 import { isValidMinioPath } from "../biocollect/mockScaleBiometrics";
 import { runMockDeduplication } from "../biocollect/submissionPipeline";
-import { assertTenantProject, createTenant, createTenantCampaign, createTenantForm, createTenantProject, createTenantReferenceDataSet, createTenantSelectionType, createTenantTeam, deleteTenantFormDraft, deleteTenantReferenceDataSet, deleteTenantSelectionType, getTenantDashboard, getTenantPhoneValidationDefaults, getTenantProjectConfiguration, getTenantReferenceDataSet, getTenantSelectionType, getTenantSyncBundle, listAllTenants, listTenantCampaigns, listTenantConflictCases, listTenantFormDrafts, listTenantForms, listTenantInvestigators, listTenantProjects, listTenantReferenceDataSetUsage, listTenantReferenceDataSetVersions, listTenantReferenceDataSets, listTenantSelectionTypes, listTenantSyncSessions, listTenantTeams, listUserTenants, requireTenantRole, saveTenantFormDraft, selectActiveTenant, tenantOwnsSubmission, updateTenantBySuperadmin, updateTenantCampaignStatus, updateTenantPhoneValidationDefaults, updateTenantProjectConfiguration, updateTenantReferenceDataSet, updateTenantSelectionType } from "../tenantDb";
+import { addTenantMember, assertTenantProject, countTenantAdmins, createTenant, createTenantCampaign, createTenantForm, createTenantProject, createTenantReferenceDataSet, createTenantSelectionType, createTenantTeam, deleteTenantFormDraft, deleteTenantReferenceDataSet, deleteTenantSelectionType, getTenantDashboard, getTenantMember, getTenantPhoneValidationDefaults, getTenantProjectConfiguration, getTenantReferenceDataSet, getTenantSelectionType, getTenantSyncBundle, listAllTenants, listTenantCampaigns, listTenantConflictCases, listTenantFormDrafts, listTenantForms, listTenantInvestigators, listTenantMembers, listTenantProjects, listTenantReferenceDataSetUsage, listTenantReferenceDataSetVersions, listTenantReferenceDataSets, listTenantSelectionTypes, listTenantSyncSessions, listTenantTeams, listUserTenants, removeTenantMember, requireTenantRole, saveTenantFormDraft, selectActiveTenant, tenantOwnsSubmission, updateTenantBySuperadmin, updateTenantCampaignStatus, updateTenantMemberRole, updateTenantPhoneValidationDefaults, updateTenantProjectConfiguration, updateTenantReferenceDataSet, updateTenantSelectionType } from "../tenantDb";
 import { CAMPAIGN_STATUSES, CONFLICT_ACTIONS, FORM_FIELD_TYPES, FORM_STEP_KINDS, TEAM_MEMBER_ROLES, TENANT_ROLES, TEXT_VALIDATION_FORMATS, type FormField, type SelectionOption } from "../../shared/biocollect";
 import { isValidRegex, validateFormSteps } from "@biocollect/form-engine";
 import { protectedProcedure, router, superadminProcedure } from "../_core/trpc";
 import { normalizeSelectionOptions, parseReferenceDataFile } from "../reference-data";
 import { storagePut } from "../storage";
 import { isValidSelectionType } from "../selection-type-validation";
+import { inviteOrEnsureKeycloakUser, isKeycloakAdminConfigured, resendKeycloakInviteEmail } from "../_core/keycloakAdmin";
 
 const tenantIdSchema = z.object({ tenantId: z.string().min(1) });
 const projectIdSchema = z.object({ tenantId: z.string().min(1), projectId: z.string().min(1) });
@@ -229,6 +230,151 @@ export const biocollectRouter = router({
       if (!await tenantOwnsSubmission(input.tenantId, input.suspectedSubmissionId) || !await tenantOwnsSubmission(input.tenantId, input.targetSubmissionId)) throw new TRPCError({ code: "FORBIDDEN", message: "Les dossiers doivent appartenir au même espace." });
       return resolveConflict({ ...input, resolvedBy: ctx.user!.id });
     }),
+  }),
+  members: router({
+    list: protectedProcedure.input(tenantIdSchema).query(async ({ ctx, input }) => {
+      await requireTenant(ctx, input.tenantId, ["Administrateur", "Superviseur"]);
+      return listTenantMembers(input.tenantId);
+    }),
+    invite: protectedProcedure
+      .input(z.object({
+        tenantId: z.string().min(1),
+        email: z.string().email().max(320),
+        role: z.enum(TENANT_ROLES),
+        name: z.string().min(1).max(160).optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        await requireTenant(ctx, input.tenantId, ["Administrateur"]);
+        if (!isKeycloakAdminConfigured()) {
+          throw new TRPCError({
+            code: "PRECONDITION_FAILED",
+            message: "L’invitation Keycloak n’est pas configurée (KEYCLOAK_ADMIN).",
+          });
+        }
+
+        const email = input.email.trim().toLowerCase();
+        const nameParts = (input.name ?? "").trim().split(/\s+/).filter(Boolean);
+        const firstName = nameParts[0];
+        const lastName = nameParts.length > 1 ? nameParts.slice(1).join(" ") : undefined;
+
+        const { user: kcUser, created, emailSent } = await inviteOrEnsureKeycloakUser({
+          email,
+          firstName,
+          lastName,
+          resendEmail: true,
+        }).catch(error => {
+          throw new TRPCError({
+            code: "BAD_GATEWAY",
+            message: error instanceof Error ? error.message : "Invitation Keycloak impossible.",
+          });
+        });
+
+        const displayName =
+          input.name?.trim() ||
+          [kcUser.firstName, kcUser.lastName].filter(Boolean).join(" ") ||
+          email;
+
+        const existingLocal =
+          (await getUserByOpenId(kcUser.id)) ?? (await getUserByEmail(email));
+        await upsertUser({
+          openId: kcUser.id,
+          email,
+          name: displayName,
+          loginMethod: "keycloak-invite",
+          lastSignedIn: new Date(),
+          // Keep Superadmin; otherwise align global role with the invited tenant role (nav / procedures).
+          ...(existingLocal?.role === "Superadmin" ? {} : { role: input.role }),
+        });
+
+        let localUser = await getUserByOpenId(kcUser.id);
+        if (!localUser) {
+          localUser = await getUserByEmail(email);
+        }
+        if (!localUser) {
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: "Impossible de créer l’utilisateur local après l’invitation Keycloak.",
+          });
+        }
+
+        await addTenantMember({
+          tenantId: input.tenantId,
+          userId: localUser.id,
+          role: input.role,
+        });
+
+        const member = await getTenantMember(input.tenantId, localUser.id);
+        return { member, created, emailSent };
+      }),
+    updateRole: protectedProcedure
+      .input(z.object({
+        tenantId: z.string().min(1),
+        userId: z.number().int().positive(),
+        role: z.enum(TENANT_ROLES),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        await requireTenant(ctx, input.tenantId, ["Administrateur"]);
+        const current = await getTenantMember(input.tenantId, input.userId);
+        if (!current) throw new TRPCError({ code: "NOT_FOUND", message: "Membre introuvable." });
+        if (current.role === "Administrateur" && input.role !== "Administrateur") {
+          const admins = await countTenantAdmins(input.tenantId);
+          if (admins <= 1) {
+            throw new TRPCError({
+              code: "BAD_REQUEST",
+              message: "Impossible de rétrograder le dernier administrateur.",
+            });
+          }
+        }
+        await updateTenantMemberRole(input);
+        const member = await getTenantMember(input.tenantId, input.userId);
+        if (member && member.openId) {
+          const local = await getUserByOpenId(member.openId);
+          if (local && local.role !== "Superadmin") {
+            await upsertUser({ openId: member.openId, role: input.role });
+          }
+        }
+        return member;
+      }),
+    remove: protectedProcedure
+      .input(z.object({
+        tenantId: z.string().min(1),
+        userId: z.number().int().positive(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        await requireTenant(ctx, input.tenantId, ["Administrateur"]);
+        try {
+          const removed = await removeTenantMember({
+            tenantId: input.tenantId,
+            userId: input.userId,
+            actorUserId: ctx.user!.id,
+          });
+          if (!removed) throw new TRPCError({ code: "NOT_FOUND", message: "Membre introuvable." });
+          return { success: true };
+        } catch (error) {
+          if (error instanceof Error && error.message.includes("dernier administrateur")) {
+            throw new TRPCError({ code: "BAD_REQUEST", message: error.message });
+          }
+          throw error;
+        }
+      }),
+    resendInvite: protectedProcedure
+      .input(z.object({
+        tenantId: z.string().min(1),
+        userId: z.number().int().positive(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        await requireTenant(ctx, input.tenantId, ["Administrateur"]);
+        if (!isKeycloakAdminConfigured()) {
+          throw new TRPCError({
+            code: "PRECONDITION_FAILED",
+            message: "L’invitation Keycloak n’est pas configurée (KEYCLOAK_ADMIN).",
+          });
+        }
+        const member = await getTenantMember(input.tenantId, input.userId);
+        if (!member) throw new TRPCError({ code: "NOT_FOUND", message: "Membre introuvable." });
+        await resendKeycloakInviteEmail(member.openId);
+        return { success: true };
+      }),
   }),
   session: protectedProcedure.query(({ ctx }) => ({ role: ctx.user!.role, name: ctx.user!.name, isSuperadmin: ctx.user!.role === "Superadmin" })),
 });

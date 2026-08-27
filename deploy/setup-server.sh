@@ -83,6 +83,17 @@ _jwt="${BC_JWT_SECRET:-CHANGE_ME_openssl_rand_base64_32}"
 _oidc_issuer="${BC_OIDC_ISSUER_URI:-https://auth.optimizesolux.com/realms/biocollect}"
 _oidc_client="${BC_OIDC_CLIENT_ID:-biocollect-web}"
 _owner="${BC_OWNER_OPEN_ID:-}"
+_owner_email="${BC_OWNER_EMAIL:-francis.ahonsou@gmail.com}"
+_kc_url="${BC_KEYCLOAK_URL:-https://auth.optimizesolux.com}"
+_kc_admin="${BC_KEYCLOAK_ADMIN:-}"
+_kc_admin_password="${BC_KEYCLOAK_ADMIN_PASSWORD:-}"
+_kc_actions_client="${BC_KEYCLOAK_ACTIONS_CLIENT_ID:-biocollect-web}"
+_app_public_url="${BC_APP_PUBLIC_URL:-https://biocollect.optimizesolux.com}"
+_nh_base="${BC_NOTIFICATION_HUB_BASE_URL:-https://notification-api.optimizesolux.com}"
+_nh_from="${BC_NOTIFICATION_HUB_FROM:-notifications@optimizesolux.com}"
+_nh_token_url="${BC_NOTIFICATION_HUB_OAUTH_TOKEN_URL:-https://auth.optimizesolux.com/realms/notification-hub/protocol/openid-connect/token}"
+_nh_client_id="${BC_NOTIFICATION_HUB_OAUTH_CLIENT_ID:-biocollect-notification-sender}"
+_nh_client_secret="${BC_NOTIFICATION_HUB_OAUTH_CLIENT_SECRET:-}"
 _redis_db="${BC_REDIS_DATABASE:-7}"
 
 _db_pass_enc="$(urlencode "$_db_pass")"
@@ -91,6 +102,13 @@ _database_url="mysql://${_db_user}:${_db_pass_enc}@mysql:3306/${_db_name}"
 _db_pass_q="$(env_quote "$_db_pass")"
 _jwt_q="$(env_quote "$_jwt")"
 _oidc_issuer_q="$(env_quote "$_oidc_issuer")"
+_kc_url_q="$(env_quote "$_kc_url")"
+_kc_admin_q="$(env_quote "$_kc_admin")"
+_kc_admin_password_q="$(env_quote "$_kc_admin_password")"
+_app_public_url_q="$(env_quote "$_app_public_url")"
+_nh_base_q="$(env_quote "$_nh_base")"
+_nh_token_url_q="$(env_quote "$_nh_token_url")"
+_nh_client_secret_q="$(env_quote "$_nh_client_secret")"
 _database_url_q="$(env_quote "$_database_url")"
 
 PROD_ENV="$ROOT/prod/.env"
@@ -98,7 +116,8 @@ if [[ ! -f "$PROD_ENV" ]]; then
   cat > "$PROD_ENV" << EOF
 # =============================================================================
 # BioCollect PROD — $ROOT/prod/.env
-# Auth: Keycloak OIDC (realm biocollect). Redis index reserved: ${_redis_db}
+# Auth: Keycloak OIDC (realm biocollect). Notifications: notification-hub.
+# Redis index reserved: ${_redis_db}
 # =============================================================================
 DB_USER=${_db_user}
 DB_PASSWORD=${_db_pass_q}
@@ -110,6 +129,19 @@ JWT_SECRET=${_jwt_q}
 OIDC_ISSUER_URI=${_oidc_issuer_q}
 OIDC_CLIENT_ID=${_oidc_client}
 OWNER_OPEN_ID=${_owner}
+OWNER_EMAIL=${_owner_email}
+
+KEYCLOAK_URL=${_kc_url_q}
+KEYCLOAK_ADMIN=${_kc_admin_q}
+KEYCLOAK_ADMIN_PASSWORD=${_kc_admin_password_q}
+KEYCLOAK_ACTIONS_CLIENT_ID=${_kc_actions_client}
+APP_PUBLIC_URL=${_app_public_url_q}
+
+NOTIFICATION_HUB_BASE_URL=${_nh_base_q}
+NOTIFICATION_HUB_FROM=${_nh_from}
+NOTIFICATION_HUB_OAUTH_TOKEN_URL=${_nh_token_url_q}
+NOTIFICATION_HUB_OAUTH_CLIENT_ID=${_nh_client_id}
+NOTIFICATION_HUB_OAUTH_CLIENT_SECRET=${_nh_client_secret_q}
 
 REDIS_DATABASE=${_redis_db}
 

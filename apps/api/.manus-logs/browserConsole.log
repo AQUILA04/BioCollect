@@ -1,0 +1,7 @@
+[2026-08-25T07:29:06.754Z] {"timestamp":1787642944328,"level":"DEBUG","args":["[Manus] Debug collector initialized (no rrweb, UI events only)"],"stack":null}
+[2026-08-25T07:29:06.754Z] {"timestamp":1787642944385,"level":"DEBUG","args":["[vite] connected."],"stack":null}
+[2026-08-25T07:29:08.339Z] {"timestamp":1787642947003,"level":"INFO","args":["%cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools","font-weight:bold"],"stack":null}
+[2026-08-25T07:32:02.335Z] {"timestamp":1787643120907,"level":"DEBUG","args":["[vite]","hot updated: /src/index.css"],"stack":null}
+[2026-08-25T07:32:02.335Z] {"timestamp":1787643120907,"level":"DEBUG","args":["[vite]","hot updated: /src/components/landing/HeroMockup.tsx"],"stack":null}
+[2026-08-25T07:32:06.335Z] {"timestamp":1787643124734,"level":"DEBUG","args":["[vite]","hot updated: /src/pages/Landing.tsx"],"stack":null}
+[2026-08-25T07:32:06.335Z] {"timestamp":1787643124734,"level":"DEBUG","args":["[vite]","hot updated: /src/index.css"],"stack":null}

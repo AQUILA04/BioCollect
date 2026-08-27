@@ -1,9 +1,11 @@
 # Secrets GitHub + DNS — BioCollect (OptimizeSolux Contabo)
 
-Prérequis VPS : **shared-traefik** + **optimize-common-infra** (Keycloak realm `biocollect`).
+Prérequis VPS : **shared-traefik** + **optimize-common-infra** (Keycloak realms `biocollect` + `notification-hub`).
 
 Auth produit : **Keycloak OIDC** (`OIDC_ISSUER_URI=https://auth.optimizesolux.com/realms/biocollect`).  
-SSO Google optionnel : voir [`docs/GOOGLE-OIDC-SETUP.md`](../docs/GOOGLE-OIDC-SETUP.md).
+SSO Google optionnel : voir [`docs/GOOGLE-OIDC-SETUP.md`](../docs/GOOGLE-OIDC-SETUP.md).  
+Notifications : [`docs/NOTIFICATION-HUB.md`](../docs/NOTIFICATION-HUB.md).  
+Invitations membres : [`docs/MEMBER-INVITES.md`](../docs/MEMBER-INVITES.md).
 
 ## 1. DNS Cloudflare
 
@@ -34,7 +36,18 @@ Réutilise la même clé SSH que SharedTraefik / CleanTrack / eHealth si possibl
 | `VITE_KEYCLOAK_URL` | `https://auth.optimizesolux.com` (bake CI image) |
 | `VITE_KEYCLOAK_REALM` | `biocollect` |
 | `VITE_KEYCLOAK_CLIENT_ID` | `biocollect-web` |
-| `OWNER_OPEN_ID` | Keycloak `sub` du premier superadmin (optionnel) |
+| `OWNER_EMAIL` | `francis.ahonsou@gmail.com` (Superadmin idempotent) |
+| `OWNER_OPEN_ID` | Keycloak `sub` (optionnel, en complément de l’email) |
+| `KEYCLOAK_URL` | `https://auth.optimizesolux.com` |
+| `KEYCLOAK_ADMIN` | admin master Keycloak (invites membres) |
+| `KEYCLOAK_ADMIN_PASSWORD` | mot de passe admin Keycloak |
+| `KEYCLOAK_ACTIONS_CLIENT_ID` | `biocollect-web` (optionnel) |
+| `APP_PUBLIC_URL` | `https://biocollect.optimizesolux.com` (redirect post-setup) |
+| `NOTIFICATION_HUB_BASE_URL` | `https://notification-api.optimizesolux.com` |
+| `NOTIFICATION_HUB_FROM` | `notifications@optimizesolux.com` |
+| `NOTIFICATION_HUB_OAUTH_TOKEN_URL` | `https://auth.optimizesolux.com/realms/notification-hub/protocol/openid-connect/token` |
+| `NOTIFICATION_HUB_OAUTH_CLIENT_ID` | `biocollect-notification-sender` |
+| `NOTIFICATION_HUB_OAUTH_CLIENT_SECRET` | secret Keycloak (realm `notification-hub`) |
 
 Créer aussi l’**environment** GitHub Actions nommé `prod`.
 
@@ -43,7 +56,8 @@ Créer aussi l’**environment** GitHub Actions nommé `prod`.
 | URL | Rôle |
 |-----|------|
 | https://biocollect.optimizesolux.com | App (SPA + API same-origin) |
-| https://auth.optimizesolux.com/realms/biocollect | Keycloak realm (common-infra) |
+| https://auth.optimizesolux.com/realms/biocollect | Keycloak realm produit |
+| https://notification-api.optimizesolux.com | notification-hub API |
 
 ## 4. Pipelines
 
@@ -61,4 +75,5 @@ Promote : déploie la dernière image publiée depuis l’historique `main` (tag
 - Secrets hors git : `/opt/biocollect/prod/.env`
 - Template : `deploy/.env.prod.example`
 - Redis DB index réservé : `7` (`biocollect:`)
-- Realm + thème Keycloak : `optimize-common-infra/images/keycloak/`
+- Realm + thème Keycloak produit : `optimize-common-infra/images/keycloak/`
+- Client notifications : realm `notification-hub` → `biocollect-notification-sender`
