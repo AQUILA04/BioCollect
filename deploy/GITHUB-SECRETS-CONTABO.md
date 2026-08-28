@@ -5,7 +5,8 @@ Prérequis VPS : **shared-traefik** + **optimize-common-infra** (Keycloak realms
 Auth produit : **Keycloak OIDC** (`OIDC_ISSUER_URI=https://auth.optimizesolux.com/realms/biocollect`).  
 SSO Google optionnel : voir [`docs/GOOGLE-OIDC-SETUP.md`](../docs/GOOGLE-OIDC-SETUP.md).  
 Notifications : [`docs/NOTIFICATION-HUB.md`](../docs/NOTIFICATION-HUB.md).  
-Invitations membres : [`docs/MEMBER-INVITES.md`](../docs/MEMBER-INVITES.md).
+Invitations membres : [`docs/MEMBER-INVITES.md`](../docs/MEMBER-INVITES.md).  
+Thèmes Keycloak : [`docs/KEYCLOAK-THEMES.md`](../docs/KEYCLOAK-THEMES.md).
 
 ## 1. DNS Cloudflare
 
