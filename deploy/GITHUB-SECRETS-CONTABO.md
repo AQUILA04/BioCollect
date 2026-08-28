@@ -7,7 +7,7 @@ SSO Google optionnel : voir [`docs/GOOGLE-OIDC-SETUP.md`](../docs/GOOGLE-OIDC-SE
 Notifications : [`docs/NOTIFICATION-HUB.md`](../docs/NOTIFICATION-HUB.md).  
 Invitations membres : [`docs/MEMBER-INVITES.md`](../docs/MEMBER-INVITES.md).  
 Thèmes Keycloak : [`docs/KEYCLOAK-THEMES.md`](../docs/KEYCLOAK-THEMES.md).  
-Compte owner Keycloak (une fois) : `bash scripts/bootstrap-biocollect-owner.sh` dans common-infra (voir doc ci-dessus).
+Compte owner Keycloak (une fois) : `bash deploy/bootstrap-biocollect-owner.sh` dans common-infra (voir doc ci-dessus).
 
 ## 1. DNS Cloudflare
 

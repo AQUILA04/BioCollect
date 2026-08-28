@@ -29,7 +29,7 @@ Si le realm existe déjà, `--import-realm` n’ajoute pas les users du JSON. Ex
 cd /opt/optimizesolux/common-infra
 git pull
 # Définir BIOCOLLECT_OWNER_EMAIL / BIOCOLLECT_OWNER_PASSWORD dans .env si besoin
-bash scripts/bootstrap-biocollect-owner.sh
+bash deploy/bootstrap-biocollect-owner.sh
 ```
 
 Ou manuellement : Keycloak Admin → realm **BioCollect** → Users → **Create new user** avec `francis.ahonsou@gmail.com`.
