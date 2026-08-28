@@ -27,7 +27,12 @@ export async function listAllTenants() {
   return db.select().from(tenants).orderBy(desc(tenants.createdAt));
 }
 
-export async function createTenant(input: { name: string; userId: number; requestedSlug?: string }) {
+export async function createTenant(input: {
+  name: string;
+  userId: number;
+  requestedSlug?: string;
+  addCreatorMembership?: boolean;
+}) {
   const db = await requireDb();
   const id = nanoid(20);
   const baseSlug = slugify(input.requestedSlug || input.name);
@@ -36,7 +41,9 @@ export async function createTenant(input: { name: string; userId: number; reques
   while ((await db.select({ id: tenants.id }).from(tenants).where(eq(tenants.slug, slug)).limit(1))[0]) slug = `${baseSlug}-${sequence++}`;
   await db.transaction(async tx => {
     await tx.insert(tenants).values({ id, name: input.name, slug, createdBy: input.userId });
-    await tx.insert(tenantMemberships).values({ id: nanoid(20), tenantId: id, userId: input.userId, role: "Administrateur" });
+    if (input.addCreatorMembership !== false) {
+      await tx.insert(tenantMemberships).values({ id: nanoid(20), tenantId: id, userId: input.userId, role: "Administrateur" });
+    }
   });
   return { id, name: input.name, slug };
 }

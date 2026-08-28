@@ -85,13 +85,101 @@ function safeSourceFileName(fileName: string) {
   return fileName.replace(/[^a-zA-Z0-9._-]+/g, "-").slice(0, 180) || "referentiel";
 }
 
+async function inviteTenantMember(input: {
+  tenantId: string;
+  email: string;
+  role: (typeof TENANT_ROLES)[number];
+  name?: string;
+}) {
+  if (!isKeycloakAdminConfigured()) {
+    throw new TRPCError({
+      code: "PRECONDITION_FAILED",
+      message: "L’invitation Keycloak n’est pas configurée (KEYCLOAK_ADMIN).",
+    });
+  }
+
+  const email = input.email.trim().toLowerCase();
+  const nameParts = (input.name ?? "").trim().split(/\s+/).filter(Boolean);
+  const firstName = nameParts[0];
+  const lastName = nameParts.length > 1 ? nameParts.slice(1).join(" ") : undefined;
+
+  const { user: kcUser, created, emailSent } = await inviteOrEnsureKeycloakUser({
+    email,
+    firstName,
+    lastName,
+    resendEmail: true,
+  }).catch(error => {
+    throw new TRPCError({
+      code: "BAD_GATEWAY",
+      message: error instanceof Error ? error.message : "Invitation Keycloak impossible.",
+    });
+  });
+
+  const displayName =
+    input.name?.trim() ||
+    [kcUser.firstName, kcUser.lastName].filter(Boolean).join(" ") ||
+    email;
+
+  const existingLocal =
+    (await getUserByOpenId(kcUser.id)) ?? (await getUserByEmail(email));
+  await upsertUser({
+    openId: kcUser.id,
+    email,
+    name: displayName,
+    loginMethod: "keycloak-invite",
+    lastSignedIn: new Date(),
+    ...(existingLocal?.role === "Superadmin" ? {} : { role: input.role }),
+  });
+
+  let localUser = await getUserByOpenId(kcUser.id);
+  if (!localUser) {
+    localUser = await getUserByEmail(email);
+  }
+  if (!localUser) {
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Impossible de créer l’utilisateur local après l’invitation Keycloak.",
+    });
+  }
+
+  await addTenantMember({
+    tenantId: input.tenantId,
+    userId: localUser.id,
+    role: input.role,
+  });
+
+  const member = await getTenantMember(input.tenantId, localUser.id);
+  return { member, created, emailSent };
+}
+
 export const biocollectRouter = router({
   tenants: router({
     mine: protectedProcedure.query(({ ctx }) => listUserTenants(ctx.user!.id, ctx.user!.role)),
     create: protectedProcedure.input(z.object({ name: z.string().min(3).max(160), slug: z.string().min(3).max(80).optional() })).mutation(({ ctx, input }) => createTenant({ name: input.name, requestedSlug: input.slug, userId: ctx.user!.id })),
     select: protectedProcedure.input(tenantIdSchema).mutation(({ ctx, input }) => selectActiveTenant({ tenantId: input.tenantId, userId: ctx.user!.id, userRole: ctx.user!.role })),
     all: superadminProcedure.query(() => listAllTenants()),
-    createBySuperadmin: superadminProcedure.input(z.object({ name: z.string().min(3).max(160), slug: z.string().min(3).max(80).optional() })).mutation(({ ctx, input }) => createTenant({ name: input.name, requestedSlug: input.slug, userId: ctx.user!.id })),
+    createBySuperadmin: superadminProcedure
+      .input(z.object({
+        name: z.string().min(3).max(160),
+        slug: z.string().min(3).max(80).optional(),
+        adminEmail: z.string().email().max(320),
+        adminName: z.string().min(1).max(160).optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const tenant = await createTenant({
+          name: input.name,
+          requestedSlug: input.slug,
+          userId: ctx.user!.id,
+          addCreatorMembership: false,
+        });
+        const { emailSent, created } = await inviteTenantMember({
+          tenantId: tenant.id,
+          email: input.adminEmail,
+          role: "Administrateur",
+          name: input.adminName,
+        });
+        return { ...tenant, emailSent, created };
+      }),
     updateBySuperadmin: superadminProcedure.input(z.object({ tenantId: z.string().min(1), name: z.string().min(3).max(160), isActive: z.boolean() })).mutation(({ input }) => updateTenantBySuperadmin(input)),
   }),
   projects: router({
@@ -245,66 +333,7 @@ export const biocollectRouter = router({
       }))
       .mutation(async ({ ctx, input }) => {
         await requireTenant(ctx, input.tenantId, ["Administrateur"]);
-        if (!isKeycloakAdminConfigured()) {
-          throw new TRPCError({
-            code: "PRECONDITION_FAILED",
-            message: "L’invitation Keycloak n’est pas configurée (KEYCLOAK_ADMIN).",
-          });
-        }
-
-        const email = input.email.trim().toLowerCase();
-        const nameParts = (input.name ?? "").trim().split(/\s+/).filter(Boolean);
-        const firstName = nameParts[0];
-        const lastName = nameParts.length > 1 ? nameParts.slice(1).join(" ") : undefined;
-
-        const { user: kcUser, created, emailSent } = await inviteOrEnsureKeycloakUser({
-          email,
-          firstName,
-          lastName,
-          resendEmail: true,
-        }).catch(error => {
-          throw new TRPCError({
-            code: "BAD_GATEWAY",
-            message: error instanceof Error ? error.message : "Invitation Keycloak impossible.",
-          });
-        });
-
-        const displayName =
-          input.name?.trim() ||
-          [kcUser.firstName, kcUser.lastName].filter(Boolean).join(" ") ||
-          email;
-
-        const existingLocal =
-          (await getUserByOpenId(kcUser.id)) ?? (await getUserByEmail(email));
-        await upsertUser({
-          openId: kcUser.id,
-          email,
-          name: displayName,
-          loginMethod: "keycloak-invite",
-          lastSignedIn: new Date(),
-          // Keep Superadmin; otherwise align global role with the invited tenant role (nav / procedures).
-          ...(existingLocal?.role === "Superadmin" ? {} : { role: input.role }),
-        });
-
-        let localUser = await getUserByOpenId(kcUser.id);
-        if (!localUser) {
-          localUser = await getUserByEmail(email);
-        }
-        if (!localUser) {
-          throw new TRPCError({
-            code: "INTERNAL_SERVER_ERROR",
-            message: "Impossible de créer l’utilisateur local après l’invitation Keycloak.",
-          });
-        }
-
-        await addTenantMember({
-          tenantId: input.tenantId,
-          userId: localUser.id,
-          role: input.role,
-        });
-
-        const member = await getTenantMember(input.tenantId, localUser.id);
-        return { member, created, emailSent };
+        return inviteTenantMember(input);
       }),
     updateRole: protectedProcedure
       .input(z.object({
