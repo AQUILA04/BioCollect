@@ -40,14 +40,15 @@ Ensuite : se connecter sur https://biocollect.optimizesolux.com → le rôle **S
 
 1. Rebuild/publish image Keycloak (themes baked in Dockerfile).
 2. Ensure realm JSON is present under `images/keycloak/realms/`.
-3. On Contabo:
+3. On Contabo (or via GitHub Actions **Optimize Common Infra CD** → `install` + force-update `keycloak`):
 
 ```bash
 cd /opt/optimizesolux/common-infra
 git pull
 sudo ./install.sh --force-update keycloak
-bash scripts/bootstrap-biocollect-owner.sh
 ```
+
+> **CD GitHub** : le workflow sync le repo puis recrée Keycloak. Les thèmes sont montés depuis `images/keycloak/themes/` (pas besoin de rebuild image pour du CSS). Vérifier que le job CD **prod** est bien passé au vert (approbation environment si configurée).
 
 4. **Master realm (one-time ops)** : Realm settings → Themes → Login theme = `optimizesolux`  
    → les erreurs sans realm valide affichent le branding BioCollect au lieu de la page Keycloak par défaut.
