@@ -12,11 +12,22 @@ export type StartLoginOptions = {
   mode?: "login" | "register";
 };
 
+/** Fallback when VITE_KEYCLOAK_URL was not baked into the SPA (e.g. empty CI secret). */
+function defaultKeycloakBaseUrl(): string | undefined {
+  if (typeof window === "undefined") return undefined;
+  const host = window.location.hostname;
+  if (host === "localhost" || host === "127.0.0.1") return "http://localhost:8180";
+  if (host.endsWith(".optimizesolux.com") || host === "optimizesolux.com") {
+    return "https://auth.optimizesolux.com";
+  }
+  return undefined;
+}
+
 function keycloakIssuer(): string {
-  const url = (import.meta.env.VITE_KEYCLOAK_URL as string | undefined)?.replace(
-    /\/$/,
-    ""
-  );
+  const url =
+    (import.meta.env.VITE_KEYCLOAK_URL as string | undefined)?.replace(/\/$/, "") ||
+    defaultKeycloakBaseUrl() ||
+    "";
   const realm =
     (import.meta.env.VITE_KEYCLOAK_REALM as string | undefined) || "biocollect";
   if (!url) {
@@ -31,13 +42,14 @@ function keycloakIssuer(): string {
 /**
  * Start Keycloak OIDC login (local account or optional Google SSO on the KC page).
  * Call from an event handler — not during render — so the state cookie stays in sync.
+ * @returns false when Keycloak URL could not be resolved (no redirect started).
  */
-export const startLogin = (options?: StartLoginOptions) => {
+export const startLogin = (options?: StartLoginOptions): boolean => {
   const issuer = keycloakIssuer();
   const clientId =
     (import.meta.env.VITE_KEYCLOAK_CLIENT_ID as string | undefined) ||
     "biocollect-web";
-  if (!issuer) return;
+  if (!issuer) return false;
 
   const redirectUri = `${window.location.origin}/api/oauth/callback`;
   const nonce = crypto.randomUUID();
@@ -65,4 +77,5 @@ export const startLogin = (options?: StartLoginOptions) => {
 
     window.location.href = url.toString();
   })();
+  return true;
 };

@@ -25,6 +25,7 @@ import {
 import { AnimatePresence, motion, useReducedMotion, useScroll, useTransform, type Variants } from "framer-motion";
 import { useEffect, useRef, useState } from "react";
 import { Link, useLocation } from "wouter";
+import { toast } from "sonner";
 
 type FeatureItem = {
   icon: LucideIcon;
@@ -93,13 +94,17 @@ export default function Landing() {
   }
 
   function signIn() {
-    if (isAuthenticated) goToSpaces();
-    else startLogin({ mode: "login" });
+    if (isAuthenticated) return goToSpaces();
+    if (!startLogin({ mode: "login" })) {
+      toast.error(t("auth.keycloakUnavailable"));
+    }
   }
 
   function createWorkspace() {
-    if (isAuthenticated) goToSpaces();
-    else startLogin({ mode: "register" });
+    if (isAuthenticated) return goToSpaces();
+    if (!startLogin({ mode: "register" })) {
+      toast.error(t("auth.keycloakUnavailable"));
+    }
   }
 
   function closeMenu() {
