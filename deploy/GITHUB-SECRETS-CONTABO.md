@@ -6,7 +6,8 @@ Auth produit : **Keycloak OIDC** (`OIDC_ISSUER_URI=https://auth.optimizesolux.co
 SSO Google optionnel : voir [`docs/GOOGLE-OIDC-SETUP.md`](../docs/GOOGLE-OIDC-SETUP.md).  
 Notifications : [`docs/NOTIFICATION-HUB.md`](../docs/NOTIFICATION-HUB.md).  
 Invitations membres : [`docs/MEMBER-INVITES.md`](../docs/MEMBER-INVITES.md).  
-Thèmes Keycloak : [`docs/KEYCLOAK-THEMES.md`](../docs/KEYCLOAK-THEMES.md).
+Thèmes Keycloak : [`docs/KEYCLOAK-THEMES.md`](../docs/KEYCLOAK-THEMES.md).  
+Compte owner Keycloak (une fois) : `bash scripts/bootstrap-biocollect-owner.sh` dans common-infra (voir doc ci-dessus).
 
 ## 1. DNS Cloudflare
 
