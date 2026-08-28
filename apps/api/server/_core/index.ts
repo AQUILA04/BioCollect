@@ -10,6 +10,7 @@ import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
 import { registerMobileSyncRoutes } from "../mobile/sync";
 import { ensureSuperadminByEmail } from "../db";
+import { runMigrations } from "../migrate";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -31,6 +32,13 @@ async function findAvailablePort(startPort: number = 3000): Promise<number> {
 }
 
 async function startServer() {
+  try {
+    await runMigrations();
+  } catch (error) {
+    console.error("[Database] Migration failed:", error);
+    throw error;
+  }
+
   try {
     await ensureSuperadminByEmail();
   } catch (error) {
