@@ -20,11 +20,12 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 import { startLogin } from "@/const";
+import { useTenant } from "@/contexts/TenantContext";
 import { useI18n } from "@/contexts/I18nContext";
 import type { TranslationKey } from "@biocollect/i18n";
 import { useIsMobile } from "@/hooks/useMobile";
 import { Building2, Crown, Database, FilePenLine, FolderKanban, GitBranch, GitCompareArrows, LayoutDashboard, LogOut, PanelLeft, RadioTower, Users } from "lucide-react";
-import { CSSProperties, useEffect, useRef, useState } from "react";
+import { CSSProperties, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { DashboardLayoutSkeleton } from './DashboardLayoutSkeleton';
 import { LanguageSelector } from "./LanguageSelector";
@@ -117,6 +118,7 @@ function DashboardLayoutContent({
   setSidebarWidth,
 }: DashboardLayoutContentProps) {
   const { user, logout } = useAuth();
+  const { tenantId, tenants } = useTenant();
   const [location, setLocation] = useLocation();
   const { state, toggleSidebar } = useSidebar();
   const isCollapsed = state === "collapsed";
@@ -124,8 +126,19 @@ function DashboardLayoutContent({
   const sidebarRef = useRef<HTMLDivElement>(null);
   const isMobile = useIsMobile();
   const { t } = useI18n();
+  const navigationRoles = useMemo(() => {
+    const roles = new Set<string>();
+    if (!user) return roles;
+    roles.add(user.role);
+    const membership = tenants.find(entry => entry.tenant.id === tenantId)?.membership;
+    if (membership?.role) roles.add(membership.role);
+    return roles;
+  }, [user, tenantId, tenants]);
   const navigationItems = menuItems(t);
-  const activeMenuItem = navigationItems.find(item => item.path === location);
+  const visibleNavigationItems = navigationItems.filter(item =>
+    item.roles.some(role => navigationRoles.has(role))
+  );
+  const activeMenuItem = visibleNavigationItems.find(item => item.path === location);
 
   useEffect(() => {
     if (isCollapsed) {
@@ -192,7 +205,7 @@ function DashboardLayoutContent({
 
           <SidebarContent className="gap-0">
             <SidebarMenu className="px-2 py-1">
-              {navigationItems.filter(item => user && item.roles.includes(user.role)).map(item => {
+              {visibleNavigationItems.map(item => {
                 const isActive = location === item.path;
                 return (
                   <SidebarMenuItem key={item.path}>
