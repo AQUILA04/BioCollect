@@ -3,7 +3,7 @@ import { z } from "zod";
 import { createSyncedSubmission, getUserByEmail, getUserByOpenId, resolveConflict, upsertUser } from "../db";
 import { isValidMinioPath } from "../biocollect/mockScaleBiometrics";
 import { runMockDeduplication } from "../biocollect/submissionPipeline";
-import { addTenantMember, assertTenantProject, countTenantAdmins, createTenant, createTenantCampaign, createTenantForm, createTenantProject, createTenantReferenceDataSet, createTenantSelectionType, createTenantTeam, deleteTenantFormDraft, deleteTenantReferenceDataSet, deleteTenantSelectionType, getTenantDashboard, getTenantMember, getTenantPhoneValidationDefaults, getTenantProjectConfiguration, getTenantReferenceDataSet, getTenantSelectionType, getTenantSyncBundle, listAllTenants, listTenantCampaigns, listTenantConflictCases, listTenantFormDrafts, listTenantForms, listTenantInvestigators, listTenantMembers, listTenantProjects, listTenantReferenceDataSetUsage, listTenantReferenceDataSetVersions, listTenantReferenceDataSets, listTenantSelectionTypes, listTenantSyncSessions, listTenantTeams, listUserTenants, removeTenantMember, requireTenantRole, saveTenantFormDraft, selectActiveTenant, tenantOwnsSubmission, updateTenantBySuperadmin, updateTenantCampaignStatus, updateTenantMemberRole, updateTenantPhoneValidationDefaults, updateTenantProjectConfiguration, updateTenantReferenceDataSet, updateTenantSelectionType } from "../tenantDb";
+import { addTenantMember, assertTenantProject, countTenantAdmins, createTenant, createTenantCampaign, createTenantForm, createTenantProject, createTenantReferenceDataSet, createTenantSelectionType, createTenantTeam, deleteTenantById, deleteTenantFormDraft, deleteTenantReferenceDataSet, deleteTenantSelectionType, getTenantDashboard, getTenantMember, getTenantPhoneValidationDefaults, getTenantProjectConfiguration, getTenantReferenceDataSet, getTenantSelectionType, getTenantSyncBundle, listAllTenants, listTenantCampaigns, listTenantConflictCases, listTenantFormDrafts, listTenantForms, listTenantInvestigators, listTenantMembers, listTenantProjects, listTenantReferenceDataSetUsage, listTenantReferenceDataSetVersions, listTenantReferenceDataSets, listTenantSelectionTypes, listTenantSyncSessions, listTenantTeams, listUserTenants, removeTenantMember, requireTenantRole, saveTenantFormDraft, selectActiveTenant, tenantOwnsSubmission, updateTenantBySuperadmin, updateTenantCampaignStatus, updateTenantMemberRole, updateTenantPhoneValidationDefaults, updateTenantProjectConfiguration, updateTenantReferenceDataSet, updateTenantSelectionType } from "../tenantDb";
 import { CAMPAIGN_STATUSES, CONFLICT_ACTIONS, FORM_FIELD_TYPES, FORM_STEP_KINDS, TEAM_MEMBER_ROLES, TENANT_ROLES, TEXT_VALIDATION_FORMATS, type FormField, type SelectionOption } from "../../shared/biocollect";
 import { isValidRegex, validateFormSteps } from "@biocollect/form-engine";
 import { protectedProcedure, router, superadminProcedure } from "../_core/trpc";
@@ -85,6 +85,25 @@ function safeSourceFileName(fileName: string) {
   return fileName.replace(/[^a-zA-Z0-9._-]+/g, "-").slice(0, 180) || "referentiel";
 }
 
+function formatKeycloakInviteError(error: unknown): string {
+  const raw = error instanceof Error ? error.message : String(error);
+  if (
+    raw.includes("page HTML") ||
+    raw.includes("<!DOCTYPE") ||
+    raw.includes("Unexpected token")
+  ) {
+    return "Keycloak est injoignable ou mal configuré (KEYCLOAK_URL). L’invitation administrateur a échoué.";
+  }
+  if (raw.includes("AbortError") || /timeout/i.test(raw) || raw.includes("délai")) {
+    return "Keycloak ne répond pas (délai dépassé). Réessayez ou vérifiez KEYCLOAK_URL.";
+  }
+  if (/\b401\b/.test(raw) || /\b403\b/.test(raw)) {
+    return "Identifiants admin Keycloak invalides (KEYCLOAK_ADMIN / KEYCLOAK_ADMIN_PASSWORD).";
+  }
+  if (raw.startsWith("Keycloak") || raw.startsWith("Réponse Keycloak")) return raw;
+  return "Invitation Keycloak impossible.";
+}
+
 async function inviteTenantMember(input: {
   tenantId: string;
   email: string;
@@ -111,7 +130,7 @@ async function inviteTenantMember(input: {
   }).catch(error => {
     throw new TRPCError({
       code: "BAD_GATEWAY",
-      message: error instanceof Error ? error.message : "Invitation Keycloak impossible.",
+      message: formatKeycloakInviteError(error),
     });
   });
 
@@ -172,13 +191,23 @@ export const biocollectRouter = router({
           userId: ctx.user!.id,
           addCreatorMembership: false,
         });
-        const { emailSent, created } = await inviteTenantMember({
-          tenantId: tenant.id,
-          email: input.adminEmail,
-          role: "Administrateur",
-          name: input.adminName,
-        });
-        return { ...tenant, emailSent, created };
+        try {
+          const { emailSent, created } = await inviteTenantMember({
+            tenantId: tenant.id,
+            email: input.adminEmail,
+            role: "Administrateur",
+            name: input.adminName,
+          });
+          return { ...tenant, emailSent, created };
+        } catch (error) {
+          await deleteTenantById(tenant.id).catch(rollbackError => {
+            console.error(
+              `[BioCollect] Échec du rollback du tenant ${tenant.id}:`,
+              rollbackError
+            );
+          });
+          throw error;
+        }
       }),
     updateBySuperadmin: superadminProcedure.input(z.object({ tenantId: z.string().min(1), name: z.string().min(3).max(160), isActive: z.boolean() })).mutation(({ input }) => updateTenantBySuperadmin(input)),
   }),

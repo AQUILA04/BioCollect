@@ -3,6 +3,12 @@ import { ENV } from "./env";
 type TokenCache = { accessToken: string; expiresAtMs: number };
 let adminTokenCache: TokenCache | null = null;
 
+const ADMIN_FETCH_TIMEOUT_MS = 15_000;
+const ADMIN_FETCH_DEFAULTS: RequestInit = {
+  redirect: "manual",
+  signal: AbortSignal.timeout(ADMIN_FETCH_TIMEOUT_MS),
+};
+
 export type KeycloakUser = {
   id: string;
   username?: string;
@@ -27,6 +33,31 @@ function assertAdminConfigured() {
   }
 }
 
+async function readResponseJson<T>(response: Response, label: string): Promise<T> {
+  const body = await response.text();
+  const trimmed = body.trim();
+  if (!trimmed || trimmed.startsWith("<")) {
+    throw new Error(
+      `Keycloak a renvoyé une page HTML au lieu de JSON (${label}, HTTP ${response.status}). Vérifiez KEYCLOAK_URL (${ENV.keycloakUrl || "non défini"}).`
+    );
+  }
+  try {
+    return JSON.parse(body) as T;
+  } catch {
+    throw new Error(
+      `Réponse Keycloak invalide (${label}, HTTP ${response.status}). Vérifiez KEYCLOAK_URL.`
+    );
+  }
+}
+
+function assertNoRedirect(response: Response, label: string) {
+  if (response.status >= 300 && response.status < 400) {
+    throw new Error(
+      `Keycloak a redirigé la requête (${label}, HTTP ${response.status}). Vérifiez KEYCLOAK_URL (${ENV.keycloakUrl || "non défini"}).`
+    );
+  }
+}
+
 async function getAdminAccessToken(): Promise<string> {
   assertAdminConfigured();
   const now = Date.now();
@@ -43,10 +74,12 @@ async function getAdminAccessToken(): Promise<string> {
   });
 
   const response = await fetch(tokenUrl, {
+    ...ADMIN_FETCH_DEFAULTS,
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body,
   });
+  assertNoRedirect(response, "token");
   if (!response.ok) {
     const detail = await response.text().catch(() => "");
     throw new Error(
@@ -54,10 +87,10 @@ async function getAdminAccessToken(): Promise<string> {
     );
   }
 
-  const data = (await response.json()) as {
+  const data = await readResponseJson<{
     access_token?: string;
     expires_in?: number;
-  };
+  }>(response, "token");
   if (!data.access_token) {
     throw new Error("Keycloak admin token response missing access_token");
   }
@@ -79,7 +112,12 @@ async function adminFetch(
   if (init.body && !headers.has("Content-Type")) {
     headers.set("Content-Type", "application/json");
   }
-  return fetch(`${ENV.keycloakUrl}${path}`, { ...init, headers });
+  return fetch(`${ENV.keycloakUrl}${path}`, {
+    ...ADMIN_FETCH_DEFAULTS,
+    ...init,
+    headers,
+    signal: init.signal ?? ADMIN_FETCH_DEFAULTS.signal,
+  });
 }
 
 function realmUsersPath(suffix = ""): string {
@@ -93,13 +131,14 @@ export async function findKeycloakUserByEmail(
   const response = await adminFetch(
     `${realmUsersPath()}?email=${encodeURIComponent(normalized)}&exact=true`
   );
+  assertNoRedirect(response, "user lookup");
   if (!response.ok) {
     const detail = await response.text().catch(() => "");
     throw new Error(
       `Keycloak user lookup failed (${response.status})${detail ? `: ${detail}` : ""}`
     );
   }
-  const users = (await response.json()) as KeycloakUser[];
+  const users = await readResponseJson<KeycloakUser[]>(response, "user lookup");
   return users.find(u => u.email?.toLowerCase() === normalized) ?? users[0] ?? null;
 }
 
@@ -131,6 +170,7 @@ async function executeActionsEmail(
     });
   }
 
+  assertNoRedirect(response, "execute-actions-email");
   if (!response.ok) {
     const detail = await response.text().catch(() => "");
     throw new Error(
@@ -174,6 +214,7 @@ export async function inviteOrEnsureKeycloakUser(
       }),
     });
 
+    assertNoRedirect(createResponse, "create user");
     if (createResponse.status !== 201 && createResponse.status !== 204) {
       // Race: user created concurrently
       if (createResponse.status === 409) {
@@ -210,8 +251,12 @@ export async function inviteOrEnsureKeycloakUser(
   // Ensure UPDATE_PASSWORD is present before mailing.
   const shouldMail = Boolean(created || input.resendEmail);
   const full = await adminFetch(realmUsersPath(`/${encodeURIComponent(user.id)}`));
+  assertNoRedirect(full, "get user");
   if (full.ok) {
-    const current = (await full.json()) as KeycloakUser & Record<string, unknown>;
+    const current = await readResponseJson<KeycloakUser & Record<string, unknown>>(
+      full,
+      "get user"
+    );
     const requiredActions = Array.from(
       new Set([...(current.requiredActions ?? []), "UPDATE_PASSWORD"])
     );
@@ -251,10 +296,14 @@ export async function inviteOrEnsureKeycloakUser(
 /** Re-send UPDATE_PASSWORD email for an existing Keycloak user id (OIDC sub). */
 export async function resendKeycloakInviteEmail(openId: string): Promise<void> {
   const response = await adminFetch(realmUsersPath(`/${encodeURIComponent(openId)}`));
+  assertNoRedirect(response, "get user");
   if (!response.ok) {
     throw new Error(`Keycloak user ${openId} not found (${response.status})`);
   }
-  const current = (await response.json()) as KeycloakUser & Record<string, unknown>;
+  const current = await readResponseJson<KeycloakUser & Record<string, unknown>>(
+    response,
+    "get user"
+  );
   const requiredActions = Array.from(
     new Set([...(current.requiredActions ?? []), "UPDATE_PASSWORD"])
   );
@@ -271,4 +320,9 @@ export function isKeycloakAdminConfigured(): boolean {
       ENV.keycloakAdminUsername &&
       ENV.keycloakAdminPassword
   );
+}
+
+/** Reset cached admin token (tests only). */
+export function resetKeycloakAdminTokenCacheForTests(): void {
+  adminTokenCache = null;
 }

@@ -48,6 +48,12 @@ export async function createTenant(input: {
   return { id, name: input.name, slug };
 }
 
+/** Compensation rollback when tenant creation succeeds but admin invite fails. */
+export async function deleteTenantById(tenantId: string): Promise<void> {
+  const db = await requireDb();
+  await db.delete(tenants).where(eq(tenants.id, tenantId));
+}
+
 export async function selectActiveTenant(input: { tenantId: string; userId: number; userRole: UserRole }) {
   const access = await requireTenantRole({ tenantId: input.tenantId, userId: input.userId, userRole: input.userRole, allowed: ["Administrateur", "Superviseur", "Enquêteur"] });
   if (!access) return null;

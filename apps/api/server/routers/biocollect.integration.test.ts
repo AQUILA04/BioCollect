@@ -16,6 +16,7 @@ vi.mock("../_core/keycloakAdmin", () => ({
 vi.mock("../tenantDb", () => ({
   requireTenantRole: vi.fn(async ({ tenantId }: { tenantId: string }) => tenantId === "tenant-a" ? { tenant: { id: "tenant-a", isActive: true }, role: "Administrateur" } : null),
   createTenant: vi.fn(async (input: any) => { state.tenantCreate = input; return { id: "tenant-new", name: input.name, slug: "nouvel-espace" }; }),
+  deleteTenantById: vi.fn(async () => {}),
   selectActiveTenant: vi.fn(async (input: any) => { state.tenantSelection = input; return { id: input.tenantId }; }),
   updateTenantBySuperadmin: vi.fn(async (input: any) => { state.tenantUpdate = input; return { id: input.tenantId, ...input }; }),
   addTenantMember: vi.fn(async (input: any) => { state.tenantInvite = input; return "membership-1"; }),
@@ -41,6 +42,8 @@ vi.mock("../db", () => ({
 }));
 
 import { appRouter } from "../routers";
+import { inviteOrEnsureKeycloakUser } from "../_core/keycloakAdmin";
+import { deleteTenantById } from "../tenantDb";
 
 function context(role: "Superadmin" | "Administrateur" | "Superviseur" | "Enquêteur"): TrpcContext { return { user: { id: 42, openId: "test-user", name: "Test", email: "test@example.com", loginMethod: "test", role, createdAt: new Date(), updatedAt: new Date(), lastSignedIn: new Date() }, req: { protocol: "https", headers: {} } as TrpcContext["req"], res: {} as TrpcContext["res"] }; }
 const validPush = { tenantId: "tenant-a", projectId: "project-1", data: { nom: "Ada" }, attachments: [{ fingerType: "RIGHT_THUMB", minioPath: "minio://biocollect/fingerprints/ada.wsq", nfiqScore: 2 }] };
@@ -51,6 +54,25 @@ describe("isolation multi-tenant tRPC", () => {
   it("refuse toute synchronisation dans un tenant non autorisé", async () => { await expect(appRouter.createCaller(context("Enquêteur")).biocollect.sync.push({ ...validPush, tenantId: "tenant-b" })).rejects.toMatchObject({ code: "FORBIDDEN" }); });
   it("produit SUSPECTED_DUPLICATE dans le tenant autorisé", async () => { state.reference = { id: "validated-previous" }; const result = await appRouter.createCaller(context("Enquêteur")).biocollect.sync.push({ ...validPush, attachments: [{ ...validPush.attachments[0], minioPath: "minio://biocollect/fingerprints/duplicate-ada.wsq" }] }); expect(result?.status).toBe("SUSPECTED_DUPLICATE"); expect(result?.matchedSubmissionId).toBe("validated-previous"); });
   it("autorise un Superadmin à créer un tenant depuis le back-office", async () => { const result = await appRouter.createCaller(context("Superadmin")).biocollect.tenants.createBySuperadmin({ name: "Entité Nord", adminEmail: "admin@nord.tg" }); expect(result.id).toBe("tenant-new"); expect(result.emailSent).toBe(true); expect(state.tenantCreate).toMatchObject({ name: "Entité Nord", userId: 42, addCreatorMembership: false }); expect(state.tenantInvite).toMatchObject({ tenantId: "tenant-new", role: "Administrateur" }); });
+  it("rollback le tenant si l'invitation Keycloak échoue", async () => {
+    vi.mocked(inviteOrEnsureKeycloakUser).mockRejectedValueOnce(
+      new Error(
+        "Keycloak a renvoyé une page HTML au lieu de JSON (token, HTTP 200). Vérifiez KEYCLOAK_URL."
+      )
+    );
+    await expect(
+      appRouter
+        .createCaller(context("Superadmin"))
+        .biocollect.tenants.createBySuperadmin({
+          name: "Entité Échec",
+          adminEmail: "fail@test.tg",
+        })
+    ).rejects.toMatchObject({
+      code: "BAD_GATEWAY",
+      message: expect.stringContaining("KEYCLOAK_URL"),
+    });
+    expect(deleteTenantById).toHaveBeenCalledWith("tenant-new");
+  });
   it("permet à une personne authentifiée de créer puis sélectionner son espace", async () => { const caller = appRouter.createCaller(context("Enquêteur")); const created = await caller.biocollect.tenants.create({ name: "Collectif Sud" }); expect(created.id).toBe("tenant-new"); await caller.biocollect.tenants.select({ tenantId: "tenant-a" }); expect(state.tenantSelection).toMatchObject({ tenantId: "tenant-a", userId: 42 }); });
   it("refuse à un Administrateur de créer un tenant Superadmin", async () => { await expect(appRouter.createCaller(context("Administrateur")).biocollect.tenants.createBySuperadmin({ name: "Interdit" })).rejects.toMatchObject({ code: "FORBIDDEN" }); });
   it("permet au Superadmin de modifier l’état d’un tenant", async () => { await appRouter.createCaller(context("Superadmin")).biocollect.tenants.updateBySuperadmin({ tenantId: "tenant-a", name: "Entité renommée", isActive: false }); expect(state.tenantUpdate).toMatchObject({ tenantId: "tenant-a", name: "Entité renommée", isActive: false }); });
