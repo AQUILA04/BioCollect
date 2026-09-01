@@ -14,6 +14,7 @@ import Projects from "./pages/Projects";
 import ReferenceData from "./pages/ReferenceData";
 import SelectionTypes from "./pages/SelectionTypes";
 import Spaces from "./pages/Spaces";
+import SyncHistory from "./pages/SyncHistory";
 
 function Router() {
   return (
@@ -23,6 +24,7 @@ function Router() {
       <Route path="/spaces" component={Spaces} />
       <Route path="/superadmin" component={Spaces} />
       <Route path="/projects" component={Projects} />
+      <Route path="/sync-history" component={SyncHistory} />
       <Route path="/forms" component={FormBuilder} />
       <Route path="/field-operations" component={FieldOperations} />
       <Route path="/reference-data" component={ReferenceData} />

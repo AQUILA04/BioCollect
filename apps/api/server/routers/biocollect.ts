@@ -3,7 +3,7 @@ import { z } from "zod";
 import { createSyncedSubmission, getUserByEmail, getUserByOpenId, resolveConflict, upsertUser } from "../db";
 import { isValidMinioPath } from "../biocollect/mockScaleBiometrics";
 import { runMockDeduplication } from "../biocollect/submissionPipeline";
-import { addTenantMember, assertTenantProject, countTenantAdmins, createTenant, createTenantCampaign, createTenantForm, createTenantProject, createTenantReferenceDataSet, createTenantSelectionType, createTenantTeam, deleteTenantById, deleteTenantFormDraft, deleteTenantReferenceDataSet, deleteTenantSelectionType, getTenantDashboard, getTenantMember, getTenantPhoneValidationDefaults, getTenantProjectConfiguration, getTenantReferenceDataSet, getTenantSelectionType, getTenantSyncBundle, listAllTenants, listTenantCampaigns, listTenantConflictCases, listTenantFormDrafts, listTenantForms, listTenantInvestigators, listTenantMembers, listTenantProjects, listTenantReferenceDataSetUsage, listTenantReferenceDataSetVersions, listTenantReferenceDataSets, listTenantSelectionTypes, listTenantSyncSessions, listTenantTeams, listUserTenants, removeTenantMember, requireTenantRole, saveTenantFormDraft, selectActiveTenant, tenantOwnsSubmission, updateTenantBySuperadmin, updateTenantCampaignStatus, updateTenantMemberRole, updateTenantPhoneValidationDefaults, updateTenantProjectConfiguration, updateTenantReferenceDataSet, updateTenantSelectionType } from "../tenantDb";
+import { addTenantMember, assertTenantProject, countTenantAdmins, createTenant, createTenantCampaign, createTenantForm, createTenantProject, createTenantReferenceDataSet, createTenantSelectionType, createTenantTeam, deleteTenantById, deleteTenantFormDraft, deleteTenantReferenceDataSet, deleteTenantSelectionType, getTenantDashboard, getTenantMember, getTenantPhoneValidationDefaults, getTenantProjectConfiguration, getTenantReferenceDataSet, getTenantSelectionType, getTenantSyncBundle, listAllTenants, listInvestigatorTeamIds, listTenantCampaigns, listTenantConflictCases, listTenantFormDrafts, listTenantForms, listTenantInvestigators, listTenantMembers, listTenantProjects, listTenantReferenceDataSetUsage, listTenantReferenceDataSetVersions, listTenantReferenceDataSets, listTenantSelectionTypes, listTenantSyncSessions, listTenantTeams, listUserTenants, removeTenantMember, requireTenantRole, saveTenantFormDraft, selectActiveTenant, tenantOwnsSubmission, updateTenantBySuperadmin, updateTenantCampaignStatus, updateTenantMemberRole, updateTenantPhoneValidationDefaults, updateTenantProjectConfiguration, updateTenantReferenceDataSet, updateTenantSelectionType } from "../tenantDb";
 import { CAMPAIGN_STATUSES, CONFLICT_ACTIONS, FORM_FIELD_TYPES, FORM_STEP_KINDS, TEAM_MEMBER_ROLES, TENANT_ROLES, TEXT_VALIDATION_FORMATS, type FormField, type SelectionOption } from "../../shared/biocollect";
 import { isValidRegex, validateFormSteps } from "@biocollect/form-engine";
 import { protectedProcedure, router, superadminProcedure } from "../_core/trpc";
@@ -291,7 +291,22 @@ export const biocollectRouter = router({
     }),
   }),
   syncSessions: router({
-    list: protectedProcedure.input(z.object({ tenantId: z.string().min(1), campaignId: z.string().min(1).optional() })).query(async ({ ctx, input }) => { await requireTenant(ctx, input.tenantId, ["Administrateur", "Superviseur"]); return listTenantSyncSessions(input.tenantId, input.campaignId); }),
+    list: protectedProcedure.input(z.object({
+      tenantId: z.string().min(1),
+      campaignId: z.string().min(1).optional(),
+      projectId: z.string().min(1).optional(),
+      scope: z.enum(["mine", "team"]).optional(),
+    })).query(async ({ ctx, input }) => {
+      const access = await requireTenant(ctx, input.tenantId, ["Administrateur", "Superviseur", "Enquêteur"]);
+      const filters = { campaignId: input.campaignId, projectId: input.projectId };
+      if (access.role === "Enquêteur") {
+        if (input.scope === "mine") return listTenantSyncSessions(input.tenantId, { ...filters, operatorId: ctx.user!.id });
+        const teamIds = await listInvestigatorTeamIds(input.tenantId, ctx.user!.id);
+        if (!teamIds.length) return [];
+        return listTenantSyncSessions(input.tenantId, { ...filters, teamIds });
+      }
+      return listTenantSyncSessions(input.tenantId, filters);
+    }),
   }),
   forms: router({
     list: protectedProcedure.input(projectIdSchema).query(async ({ ctx, input }) => { await requireTenant(ctx, input.tenantId, ["Administrateur", "Superviseur"]); return listTenantForms(input.tenantId, input.projectId); }),

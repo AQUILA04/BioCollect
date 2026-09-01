@@ -135,6 +135,42 @@
 }
 
 @layer components {
+  .bio-workspace {
+    @apply min-h-svh bg-gradient-to-br from-slate-100 via-slate-50 to-sky-50/40;
+  }
+
+  .bio-panel {
+    @apply rounded-2xl border border-slate-200/80 bg-white shadow-[0_8px_30px_rgba(15,23,42,0.06)];
+  }
+
+  .bio-kicker {
+    @apply text-[11px] font-semibold uppercase tracking-[0.18em] text-sky-700;
+  }
+
+  .bio-eyebrow-dot {
+    @apply inline-block h-2 w-2 shrink-0 rounded-full bg-teal-500;
+  }
+
+  .bio-interactive {
+    @apply transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_12px_36px_rgba(15,23,42,0.08)];
+  }
+
+  .bio-finger-grid {
+    @apply grid grid-cols-2 gap-2 sm:grid-cols-5;
+  }
+
+  .bio-finger-btn {
+    @apply h-auto min-h-11 rounded-xl border px-3 py-2.5 text-sm font-medium transition-colors;
+  }
+
+  .bio-finger-btn[data-selected="true"] {
+    @apply border-blue-800 bg-blue-900 text-white shadow-sm hover:bg-blue-900;
+  }
+
+  .bio-finger-btn[data-selected="false"] {
+    @apply border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50;
+  }
+
   /**
    * Custom container utility that centers content and adds responsive padding.
    *

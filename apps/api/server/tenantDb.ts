@@ -521,7 +521,18 @@ export async function updateSyncSessionProgress(input: { syncSessionId: string; 
   await db.update(syncSessions).set({ receivedCount: input.receivedCount, failedCount: input.failedCount, deduplicationSuccessCount: input.deduplicationSuccessCount, status: input.status ?? "IN_PROGRESS", completedAt: input.status ? new Date() : null }).where(eq(syncSessions.id, input.syncSessionId));
 }
 
-export async function listTenantSyncSessions(tenantId: string, campaignId?: string) {
+export async function listInvestigatorTeamIds(tenantId: string, userId: number) {
+  const db = await requireDb();
+  const rows = await db.select({ teamId: teamMembers.teamId })
+    .from(teamMembers)
+    .innerJoin(teams, eq(teamMembers.teamId, teams.id))
+    .innerJoin(campaigns, eq(teams.campaignId, campaigns.id))
+    .innerJoin(projects, eq(campaigns.projectId, projects.id))
+    .where(and(eq(teamMembers.userId, userId), eq(projects.tenantId, tenantId)));
+  return Array.from(new Set(rows.map(row => row.teamId)));
+}
+
+export async function listTenantSyncSessions(tenantId: string, filters?: { campaignId?: string; projectId?: string; operatorId?: number; teamIds?: string[] }) {
   const db = await requireDb();
   const rows = await db.select({ session: syncSessions, campaign: campaigns, projectName: projects.name, team: teams, operator: users })
     .from(syncSessions)
@@ -529,7 +540,13 @@ export async function listTenantSyncSessions(tenantId: string, campaignId?: stri
     .innerJoin(projects, eq(campaigns.projectId, projects.id))
     .innerJoin(teams, eq(syncSessions.teamId, teams.id))
     .innerJoin(users, eq(syncSessions.operatorId, users.id))
-    .where(and(eq(projects.tenantId, tenantId), campaignId ? eq(campaigns.id, campaignId) : undefined))
+    .where(and(
+      eq(projects.tenantId, tenantId),
+      filters?.campaignId ? eq(campaigns.id, filters.campaignId) : undefined,
+      filters?.projectId ? eq(campaigns.projectId, filters.projectId) : undefined,
+      filters?.operatorId ? eq(syncSessions.operatorId, filters.operatorId) : undefined,
+      filters?.teamIds?.length ? inArray(syncSessions.teamId, filters.teamIds) : undefined,
+    ))
     .orderBy(desc(syncSessions.startedAt));
   return Promise.all(rows.map(async ({ session, campaign, projectName, team, operator }) => ({ ...session, campaign: { id: campaign.id, name: campaign.name, projectId: campaign.projectId }, projectName, team: await loadTeamDetails(team), operator: { id: operator.id, name: operator.name, email: operator.email } })));
 }

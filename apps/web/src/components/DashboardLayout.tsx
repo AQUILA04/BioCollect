@@ -10,6 +10,9 @@ import {
   Sidebar,
   SidebarContent,
   SidebarFooter,
+  SidebarGroup,
+  SidebarGroupContent,
+  SidebarGroupLabel,
   SidebarHeader,
   SidebarInset,
   SidebarMenu,
@@ -24,7 +27,7 @@ import { useTenant } from "@/contexts/TenantContext";
 import { useI18n } from "@/contexts/I18nContext";
 import type { TranslationKey } from "@biocollect/i18n";
 import { useIsMobile } from "@/hooks/useMobile";
-import { Building2, Crown, Database, FilePenLine, FolderKanban, GitBranch, GitCompareArrows, LayoutDashboard, LogOut, PanelLeft, RadioTower, Users } from "lucide-react";
+import { Building2, Crown, Database, FilePenLine, Fingerprint, FolderKanban, GitBranch, GitCompareArrows, History, LayoutDashboard, LogOut, PanelLeft, RadioTower, Users } from "lucide-react";
 import { CSSProperties, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { DashboardLayoutSkeleton } from './DashboardLayoutSkeleton';
@@ -34,6 +37,7 @@ import { Button } from "./ui/button";
 const menuItems = (t: (key: TranslationKey) => string) => [
   { icon: LayoutDashboard, label: t("navigation.dashboard"), path: "/app", roles: ["Superadmin", "Administrateur", "Superviseur", "Enquêteur"] },
   { icon: FolderKanban, label: t("navigation.projects"), path: "/projects", roles: ["Superadmin", "Administrateur", "Superviseur", "Enquêteur"] },
+  { icon: History, label: t("navigation.syncHistory"), path: "/sync-history", roles: ["Superadmin", "Administrateur", "Superviseur", "Enquêteur"] },
   { icon: FilePenLine, label: t("navigation.forms"), path: "/forms", roles: ["Superadmin", "Administrateur", "Superviseur", "Enquêteur"] },
   { icon: RadioTower, label: t("navigation.fieldOperations"), path: "/field-operations", roles: ["Superadmin", "Administrateur", "Superviseur"] },
   { icon: Database, label: t("navigation.referenceData"), path: "/reference-data", roles: ["Superadmin", "Administrateur", "Superviseur"] },
@@ -195,6 +199,9 @@ function DashboardLayoutContent({
               </button>
               {!isCollapsed ? (
                 <div className="flex items-center gap-2 min-w-0">
+                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-blue-900 text-white">
+                    <Fingerprint className="h-4 w-4" />
+                  </div>
                   <span className="font-semibold tracking-tight truncate">
                     BioCollect
                   </span>
@@ -204,26 +211,31 @@ function DashboardLayoutContent({
           </SidebarHeader>
 
           <SidebarContent className="gap-0">
-            <SidebarMenu className="px-2 py-1">
-              {visibleNavigationItems.map(item => {
-                const isActive = location === item.path;
-                return (
-                  <SidebarMenuItem key={item.path}>
-                    <SidebarMenuButton
-                      isActive={isActive}
-                      onClick={() => setLocation(item.path)}
-                      tooltip={item.label}
-                      className={`h-10 transition-all font-normal`}
-                    >
-                      <item.icon
-                        className={`h-4 w-4 ${isActive ? "text-primary" : ""}`}
-                      />
-                      <span>{item.label}</span>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                );
-              })}
-            </SidebarMenu>
+            <SidebarGroup>
+              {!isCollapsed ? <SidebarGroupLabel>{t("navigation.commands")}</SidebarGroupLabel> : null}
+              <SidebarGroupContent>
+                <SidebarMenu className="px-2 py-1">
+                  {visibleNavigationItems.map(item => {
+                    const isActive = location === item.path;
+                    return (
+                      <SidebarMenuItem key={item.path}>
+                        <SidebarMenuButton
+                          isActive={isActive}
+                          onClick={() => setLocation(item.path)}
+                          tooltip={item.label}
+                          className="h-10 transition-all font-normal"
+                        >
+                          <item.icon
+                            className={`h-4 w-4 ${isActive ? "text-primary" : ""}`}
+                          />
+                          <span>{item.label}</span>
+                        </SidebarMenuButton>
+                      </SidebarMenuItem>
+                    );
+                  })}
+                </SidebarMenu>
+              </SidebarGroupContent>
+            </SidebarGroup>
           </SidebarContent>
 
           <SidebarFooter className="p-3">
@@ -285,7 +297,7 @@ function DashboardLayoutContent({
             </div>
           </div>
         )}
-        <main className="flex-1 p-4">{children}</main>
+        <main className="bio-workspace flex-1 p-4 md:p-6">{children}</main>
       </SidebarInset>
     </>
   );
